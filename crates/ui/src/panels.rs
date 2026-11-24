@@ -252,10 +252,13 @@ pub fn live_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
         });
 
     if let Some(index) = play {
-        if let Some(channel) = app.channels.get(index) {
+        let link = app.channels.get(index).map(|channel| {
             let mut link = StreamLink::new(&channel.url);
             link.name = Some(channel.name.clone());
             link.headers = channel.headers.clone();
+            link
+        });
+        if let Some(link) = link {
             app.play(&link);
         }
     }

@@ -456,7 +456,7 @@ impl eframe::App for App {
         self.drain();
 
         egui::TopBottomPanel::top("bar").show(ctx, |ui| {
-            panels::top_bar(self, ui);
+            panels::top_bar(self, ctx, ui);
         });
 
         if self.details.is_some() {
