@@ -45,6 +45,9 @@ impl Tab {
     }
 }
 
+/// How many posters download at once.
+const MAX_POSTER_DOWNLOADS: usize = 6;
+
 /// One horizontal strip of the home screen.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Row {
@@ -168,7 +171,8 @@ impl App {
             hero: None,
             posters: HashMap::new(),
             queued_posters: HashSet::new(),
-            failed_posters: HashSet::new(),
+            poster_failures: HashMap::new(),
+            posters_in_flight: 0,
             ctx: None,
             details: None,
             links: Vec::new(),
@@ -247,13 +251,17 @@ impl App {
                     self.rows = rows;
                 }
                 Msg::Poster(url, image) => {
+                    self.posters_in_flight = self.posters_in_flight.saturating_sub(1);
+                    self.queued_posters.remove(&url);
                     if let Some(ctx) = self.ctx.clone() {
                         let texture = ctx.load_texture(&url, image, egui::TextureOptions::LINEAR);
                         self.posters.insert(url, texture);
                     }
                 }
                 Msg::PosterFailed(url) => {
-                    self.failed_posters.insert(url);
+                    self.posters_in_flight = self.posters_in_flight.saturating_sub(1);
+                    self.queued_posters.remove(&url);
+                    *self.poster_failures.entry(url).or_insert(0) += 1;
                 }
                 Msg::Repos(repos) => {
                     self.repos = repos;
@@ -297,11 +305,13 @@ impl App {
     /// Asks for a poster once, if it is not cached or already queued.
     pub(crate) fn request_poster(&mut self, ctx: &egui::Context, url: &str) {
         if self.posters.contains_key(url)
-            || self.failed_posters.contains(url)
+            || self.poster_failures.get(url).copied().unwrap_or(0) >= 2
+            || self.posters_in_flight >= MAX_POSTER_DOWNLOADS
             || !self.queued_posters.insert(url.to_string())
         {
             return;
         }
+        self.posters_in_flight += 1;
         let url = url.to_string();
         let tx = self.tx.clone();
         let ctx = ctx.clone();
