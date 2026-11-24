@@ -1,4 +1,4 @@
-//! Rendering of the four tabs and the details side panel.
+//! Rendering of the five tabs and the details side panel.
 //!
 //! Deliberately plain egui: lists and buttons. The Kotlin app's look (liquid glass,
 //! pills, animations) is a later stage; getting sources, links and playback right
@@ -273,6 +273,149 @@ pub fn live_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
             now
         ));
     }
+}
+
+/// Repositories on the left, the extensions they offer on the right.
+pub fn extensions_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
+    ui.horizontal(|ui| {
+        if ui
+            .button("Recargar")
+            .on_hover_text("repositorios y catálogo de extensiones")
+            .clicked()
+        {
+            app.load_extensions(ctx);
+        }
+        if ui
+            .button("Actualizar todas")
+            .on_hover_text("actualiza las extensiones instaladas")
+            .clicked()
+        {
+            app.update_extensions(ctx);
+        }
+        ui.separator();
+        ui.label("filtrar:");
+        ui.add(egui::TextEdit::singleline(&mut app.ext_filter).desired_width(180.0));
+    });
+    ui.separator();
+
+    ui.horizontal_top(|ui| {
+        // Repositories.
+        ui.vertical(|ui| {
+            ui.set_width(260.0);
+            ui.strong("Repositorios");
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::TextEdit::singleline(&mut app.repo_buf)
+                        .hint_text("url o código corto")
+                        .desired_width(180.0),
+                );
+                if ui.button("Añadir").clicked() {
+                    app.add_repo(ctx);
+                }
+            });
+            ui.add_space(6.0);
+            let mut remove = None;
+            egui::ScrollArea::vertical()
+                .id_salt("repos")
+                .max_height(ui.available_height())
+                .show(ui, |ui| {
+                    if app.repos.is_empty() {
+                        ui.weak("sin repositorios: añade uno para ver extensiones");
+                    }
+                    for repo in &app.repos {
+                        ui.horizontal(|ui| {
+                            if ui.small_button("✖").on_hover_text("quitar").clicked() {
+                                remove = Some(repo.url.clone());
+                            }
+                            ui.label(&repo.name);
+                        });
+                        ui.weak(&repo.url);
+                        ui.add_space(4.0);
+                    }
+                });
+            if let Some(url) = remove {
+                app.remove_repo(ctx, url);
+            }
+        });
+
+        ui.separator();
+
+        // Catalogue.
+        ui.vertical(|ui| {
+            ui.horizontal(|ui| {
+                ui.strong("Extensiones");
+                ui.weak(format!("({})", app.available.len()));
+            });
+            ui.add_space(4.0);
+            let needle = app.ext_filter.trim().to_ascii_lowercase();
+            let mut action: Option<(bool, String)> = None;
+            egui::ScrollArea::vertical()
+                .id_salt("available")
+                .show(ui, |ui| {
+                    let mut shown = 0usize;
+                    for plugin in &app.available {
+                        if !needle.is_empty()
+                            && !plugin.name.to_ascii_lowercase().contains(&needle)
+                            && !plugin.internal_name.to_ascii_lowercase().contains(&needle)
+                        {
+                            continue;
+                        }
+                        shown += 1;
+                        egui::Frame::group(ui.style()).show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.strong(&plugin.name);
+                                ui.label(format!("v{}", plugin.version));
+                                ui.weak(plugin.status_label());
+                                if let Some(language) = &plugin.language {
+                                    ui.weak(language);
+                                }
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        if plugin.is_installed() {
+                                            if plugin.update_available() {
+                                                if ui.button("Actualizar").clicked() {
+                                                    action =
+                                                        Some((true, plugin.internal_name.clone()));
+                                                }
+                                            }
+                                            if ui.button("Quitar").clicked() {
+                                                action =
+                                                    Some((false, plugin.internal_name.clone()));
+                                            }
+                                        } else if ui.button("Instalar").clicked() {
+                                            action = Some((true, plugin.internal_name.clone()));
+                                        }
+                                    },
+                                );
+                            });
+                            if let Some(description) = &plugin.description {
+                                ui.label(description);
+                            }
+                            if plugin.is_installed() {
+                                let installed = plugin.installed_version.unwrap_or_default();
+                                ui.weak(format!(
+                                    "instalada v{installed} · {}",
+                                    plugin.internal_name
+                                ));
+                            }
+                        });
+                        ui.add_space(4.0);
+                    }
+                    if shown == 0 {
+                        ui.weak("nada que mostrar todavía");
+                    }
+                });
+            if let Some((install, internal_name)) = action {
+                if install {
+                    app.install_plugin(ctx, internal_name);
+                } else {
+                    app.uninstall_plugin(ctx, internal_name);
+                }
+            }
+        });
+    });
 }
 
 pub fn settings_tab(app: &mut App, _ctx: &egui::Context, ui: &mut egui::Ui) {

@@ -71,6 +71,70 @@ pub struct HomePage {
     pub has_next: bool,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RepoInfo {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub url: String,
+    #[serde(default, rename = "iconUrl")]
+    pub icon_url: Option<String>,
+    #[serde(default, rename = "pluginLists")]
+    pub plugin_lists: i64,
+}
+
+/// An extension offered by one of the configured repositories.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AvailablePlugin {
+    #[serde(default, rename = "internalName")]
+    pub internal_name: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub version: i64,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub language: Option<String>,
+    /// 0 down, 1 ok, 2 slow, 3 beta only.
+    #[serde(default)]
+    pub status: i64,
+    /// The `.cs3` url.
+    #[serde(default)]
+    pub url: Option<String>,
+    /// The plain JVM `.jar` url, when the extension is published for JVM too.
+    #[serde(default, rename = "jarUrl")]
+    pub jar_url: Option<String>,
+    #[serde(default, rename = "repositoryUrl")]
+    pub repository_url: Option<String>,
+    /// Set when the extension is installed already.
+    #[serde(default, rename = "installedVersion")]
+    pub installed_version: Option<i64>,
+}
+
+impl AvailablePlugin {
+    pub fn is_installed(&self) -> bool {
+        self.installed_version.is_some()
+    }
+
+    pub fn update_available(&self) -> bool {
+        matches!(self.installed_version, Some(installed) if installed < self.version)
+    }
+
+    pub fn status_label(&self) -> &'static str {
+        match self.status {
+            1 => "ok",
+            2 => "lento",
+            3 => "beta",
+            _ => "caído",
+        }
+    }
+
+    pub fn download_url(&self) -> Option<&str> {
+        self.jar_url.as_deref().or(self.url.as_deref())
+    }
+}
+
 /// Talks to a running host. Cheap to clone: all state is the http client.
 #[derive(Debug, Clone)]
 pub struct HostClient {
@@ -219,6 +283,85 @@ impl HostClient {
             .unwrap_or(Value::Array(Vec::new()));
         let links: Vec<WireLink> = serde_json::from_value(list)?;
         Ok(links.into_iter().map(WireLink::into_model).collect())
+    }
+
+    pub async fn repos(&self) -> Result<Vec<RepoInfo>> {
+        let value = self.call("extensions.repos", json!({})).await?;
+        let list = value
+            .get("repos")
+            .cloned()
+            .unwrap_or(Value::Array(Vec::new()));
+        Ok(serde_json::from_value(list)?)
+    }
+
+    pub async fn add_repo(&self, url: &str) -> Result<RepoInfo> {
+        let value = self
+            .call("extensions.repos.add", json!({"url": url}))
+            .await?;
+        let repo = value.get("repo").cloned().unwrap_or(Value::Null);
+        Ok(serde_json::from_value(repo)?)
+    }
+
+    pub async fn remove_repo(&self, url: &str) -> Result<bool> {
+        let value = self
+            .call("extensions.repos.remove", json!({"url": url}))
+            .await?;
+        Ok(value
+            .get("removed")
+            .and_then(Value::as_bool)
+            .unwrap_or(false))
+    }
+
+    /// Every extension of the configured repositories, with its installed version.
+    pub async fn available(&self, repo: Option<&str>) -> Result<Vec<AvailablePlugin>> {
+        let params = match repo {
+            Some(url) => json!({"repo": url}),
+            None => json!({}),
+        };
+        let value = self.call("extensions.available", params).await?;
+        let list = value
+            .get("plugins")
+            .cloned()
+            .unwrap_or(Value::Array(Vec::new()));
+        Ok(serde_json::from_value(list).unwrap_or_default())
+    }
+
+    /// Downloads and loads an extension from the repositories. Returns its version.
+    pub async fn install_plugin(&self, internal_name: &str) -> Result<i64> {
+        let value = self
+            .call("extensions.install", json!({"internalName": internal_name}))
+            .await?;
+        Ok(value
+            .get("version")
+            .and_then(Value::as_i64)
+            .unwrap_or_default())
+    }
+
+    /// Updates every installed extension. Returns the names that changed.
+    pub async fn update_extensions(&self) -> Result<Vec<String>> {
+        let value = self.call("extensions.update", json!({})).await?;
+        Ok(value
+            .get("updated")
+            .and_then(|list| list.as_array())
+            .map(|list| {
+                list.iter()
+                    .filter_map(|name| name.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default())
+    }
+
+    pub async fn uninstall_plugin(&self, internal_name: &str) -> Result<bool> {
+        let value = self
+            .call(
+                "extensions.uninstall",
+                json!({"internalName": internal_name}),
+            )
+            .await?;
+        Ok(value
+            .get("removed")
+            .and_then(Value::as_bool)
+            .unwrap_or(false))
     }
 
     /// True when the host answers `health` inside a couple of seconds.
@@ -535,6 +678,24 @@ mod tests {
             Some("https://x/")
         );
         assert_eq!(link.subtitles[0].lang, "es");
+    }
+
+    #[test]
+    fn knows_when_an_extension_needs_updating() {
+        let plugin: AvailablePlugin =
+            serde_json::from_str(r#"{"internalName":"Cine","name":"Cine","version":7,"status":1}"#)
+                .unwrap();
+        assert!(!plugin.is_installed());
+        assert!(!plugin.update_available());
+        assert_eq!(plugin.status_label(), "ok");
+
+        let installed: AvailablePlugin = serde_json::from_str(
+            r#"{"internalName":"Cine","version":8,"installedVersion":7,"jarUrl":"https://r/x.jar"}"#,
+        )
+        .unwrap();
+        assert!(installed.is_installed());
+        assert!(installed.update_available());
+        assert_eq!(installed.download_url(), Some("https://r/x.jar"));
     }
 
     #[test]

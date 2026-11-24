@@ -150,6 +150,71 @@ with anything else that asks for the same episode.
                    "url": "https://repo.example/plugins.json", "providerCount": 3 } ] }
 ```
 
+### `extensions.repos`
+
+```json
+→ {}
+← { "repos": [ { "name": "Stream Goat", "url": "https://repo.example/repo.json",
+                 "iconUrl": null } ] }
+```
+
+### `extensions.repos.add`
+
+```json
+→ { "url": "https://repo.example/repo.json" }
+← { "repo": { "name": "Stream Goat", "url": "https://repo.example/repo.json",
+              "iconUrl": null } }
+```
+
+Accepts what the Kotlin repository manager accepts: a plain url, a
+`cloudstreamrepo://host/path` link, `https://cs.repo/...` or a short code.
+
+### `extensions.repos.remove`
+
+```json
+→ { "url": "https://repo.example/repo.json" }
+← { "removed": true }
+```
+
+### `extensions.available`
+
+```json
+→ { "repo": "https://repo.example/repo.json" }        // {} for every repository
+← { "plugins": [ { "internalName": "CineProvider", "name": "Cine", "version": 7,
+                   "description": "…", "language": "es", "status": 1,
+                   "url": "https://repo.example/Cine.cs3", "jarUrl": null,
+                   "repositoryUrl": "https://repo.example/repo.json",
+                   "installedVersion": 6 } ] }
+```
+
+`status`: 0 down, 1 ok, 2 slow, 3 beta. `installedVersion` is absent until the
+extension is installed. `jarUrl` is the plain JVM build when the extension
+publishes one; the `.cs3` needs the dex translation step inside the host.
+
+### `extensions.install`
+
+```json
+→ { "internalName": "CineProvider" }
+← { "installed": true, "version": 7 }
+```
+
+Finds the extension in the repositories, downloads it, verifies its hash and
+loads it, so its providers appear in the next `providers.list`.
+
+### `extensions.update`
+
+```json
+→ {}
+← { "updated": ["CineProvider"] }
+```
+
+### `extensions.uninstall`
+
+```json
+→ { "internalName": "CineProvider" }
+← { "removed": true }
+```
+
 ## Why not just reimplement this in Rust?
 
 Because it is not HTTP: a `.cs3` is a zip with `classes.dex`, translated to JVM

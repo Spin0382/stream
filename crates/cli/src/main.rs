@@ -172,6 +172,27 @@ enum HostCommand {
     QuickSearch { query: String },
     /// Loads an item (`--url` is the data url printed by a previous search).
     Load { provider: String, url: String },
+    /// Lists the configured extension repositories.
+    Repos,
+    /// Adds a repository (url, cloudstreamrepo:// link or short code).
+    RepoAdd { url: String },
+    /// Removes a repository.
+    RepoRemove { url: String },
+    /// Lists the extensions offered by the repositories.
+    Available {
+        /// Only this repository.
+        #[arg(long)]
+        repo: Option<String>,
+        /// Only extensions whose name matches this text.
+        #[arg(long)]
+        search: Option<String>,
+    },
+    /// Installs or updates one extension.
+    Install { internal_name: String },
+    /// Updates every installed extension.
+    Update,
+    /// Removes an extension.
+    Uninstall { internal_name: String },
     /// Lists the links of an item and optionally plays one.
     Links {
         provider: String,
@@ -455,6 +476,63 @@ async fn host_command(connection: HostConnection, command: HostCommand) -> Resul
             for episode in &item.episodes {
                 println!("  · {}", episode.label());
             }
+        }
+        HostCommand::Repos => {
+            for repo in host.repos().await? {
+                println!("{:<32} {}", truncate(&repo.name, 32), repo.url);
+            }
+        }
+        HostCommand::RepoAdd { url } => {
+            let repo = host.add_repo(&url).await?;
+            println!("añadido {} ({})", repo.name, repo.url);
+        }
+        HostCommand::RepoRemove { url } => {
+            let removed = host.remove_repo(&url).await?;
+            println!("eliminado: {removed}");
+        }
+        HostCommand::Available { repo, search } => {
+            let mut plugins = host.available(repo.as_deref()).await?;
+            if let Some(search) = search.as_deref() {
+                let needle = search.to_ascii_lowercase();
+                plugins.retain(|plugin| {
+                    plugin.name.to_ascii_lowercase().contains(&needle)
+                        || plugin.internal_name.to_ascii_lowercase().contains(&needle)
+                });
+            }
+            println!("{} extensiones\n", plugins.len());
+            for plugin in plugins {
+                let mark = if plugin.update_available() {
+                    "actualizar"
+                } else if plugin.is_installed() {
+                    "instalada"
+                } else {
+                    "disponible"
+                };
+                println!(
+                    "{:<34} v{:<6} {:<11} {:<9} {}",
+                    truncate(&plugin.name, 34),
+                    plugin.version,
+                    plugin.status_label(),
+                    mark,
+                    plugin.internal_name
+                );
+            }
+        }
+        HostCommand::Install { internal_name } => {
+            let version = host.install_plugin(&internal_name).await?;
+            println!("instalada {internal_name} v{version}");
+        }
+        HostCommand::Update => {
+            let updated = host.update_extensions().await?;
+            if updated.is_empty() {
+                println!("todo al día");
+            } else {
+                println!("actualizadas: {}", updated.join(", "));
+            }
+        }
+        HostCommand::Uninstall { internal_name } => {
+            host.uninstall_plugin(&internal_name).await?;
+            println!("desinstalada {internal_name}");
         }
         HostCommand::Links {
             provider,

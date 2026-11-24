@@ -6,7 +6,7 @@
 use eframe::egui;
 use std::future::Future;
 use std::sync::mpsc::{channel, Receiver, Sender};
-use streamgoat_core::host::{HostClient, PluginInfo, ProviderInfo};
+use streamgoat_core::host::{AvailablePlugin, HostClient, PluginInfo, ProviderInfo, RepoInfo};
 use streamgoat_core::live::{Channel, Guide, LiveSource};
 use streamgoat_core::model::{MediaItem, StreamLink};
 use streamgoat_core::player;
@@ -20,17 +20,25 @@ pub enum Tab {
     Home,
     Search,
     Live,
+    Extensions,
     Settings,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 4] = [Tab::Home, Tab::Search, Tab::Live, Tab::Settings];
+    pub const ALL: [Tab; 5] = [
+        Tab::Home,
+        Tab::Search,
+        Tab::Live,
+        Tab::Extensions,
+        Tab::Settings,
+    ];
 
     pub fn title(self) -> &'static str {
         match self {
             Tab::Home => "Inicio",
             Tab::Search => "Buscar",
             Tab::Live => "Live TV",
+            Tab::Extensions => "Extensiones",
             Tab::Settings => "Ajustes",
         }
     }
@@ -39,6 +47,8 @@ impl Tab {
 pub enum Msg {
     Providers(Vec<ProviderInfo>),
     Plugins(Vec<PluginInfo>),
+    Repos(Vec<RepoInfo>),
+    Available(Vec<AvailablePlugin>),
     Items(Vec<MediaItem>),
     Details(Box<MediaItem>),
     Links(Vec<StreamLink>),
@@ -59,6 +69,10 @@ pub struct App {
 
     pub providers: Vec<ProviderInfo>,
     pub plugins: Vec<PluginInfo>,
+    pub repos: Vec<RepoInfo>,
+    pub available: Vec<AvailablePlugin>,
+    pub ext_filter: String,
+    pub repo_buf: String,
     pub provider: Option<String>,
     pub items: Vec<MediaItem>,
     pub details: Option<MediaItem>,
@@ -126,6 +140,10 @@ impl App {
             addons: Vec::new(),
             providers: Vec::new(),
             plugins: Vec::new(),
+            repos: Vec::new(),
+            available: Vec::new(),
+            ext_filter: String::new(),
+            repo_buf: String::new(),
             provider: None,
             items: Vec::new(),
             details: None,
@@ -188,6 +206,15 @@ impl App {
                     self.status = format!("{} extensiones", plugins.len());
                     self.plugins = plugins;
                 }
+                Msg::Repos(repos) => {
+                    self.repos = repos;
+                }
+                Msg::Available(plugins) => {
+                    let updates = plugins.iter().filter(|p| p.update_available()).count();
+                    self.status =
+                        format!("{} extensiones, {updates} para actualizar", plugins.len());
+                    self.available = plugins;
+                }
                 Msg::Items(items) => {
                     self.status = format!("{} resultados", items.len());
                     self.items = items;
@@ -217,6 +244,105 @@ impl App {
     }
 
     // --- actions --------------------------------------------------------------
+
+    /// Repositories and every extension they offer.
+    pub fn load_extensions(&mut self, ctx: &egui::Context) {
+        let Some(host) = self.host.clone() else {
+            self.error = Some("las extensiones necesitan el host (Ajustes)".to_string());
+            return;
+        };
+        self.spawn_job(ctx, async move {
+            match host.available(None).await {
+                Ok(plugins) => Msg::Available(plugins),
+                Err(error) => Msg::Error(format!("{error}")),
+            }
+        });
+        self.load_repos(ctx);
+    }
+
+    pub fn load_repos(&mut self, ctx: &egui::Context) {
+        let Some(host) = self.host.clone() else {
+            return;
+        };
+        self.spawn_job(ctx, async move {
+            match host.repos().await {
+                Ok(repos) => Msg::Repos(repos),
+                Err(error) => Msg::Error(format!("{error}")),
+            }
+        });
+    }
+
+    pub fn add_repo(&mut self, ctx: &egui::Context) {
+        let url = self.repo_buf.trim().to_string();
+        if url.is_empty() {
+            return;
+        }
+        let Some(host) = self.host.clone() else {
+            return;
+        };
+        self.spawn_job(ctx, async move {
+            match host.add_repo(&url).await {
+                Ok(repo) => Msg::Status(format!("repositorio añadido: {}", repo.name)),
+                Err(error) => Msg::Error(format!("{error}")),
+            }
+        });
+        self.repo_buf.clear();
+        self.load_repos(ctx);
+    }
+
+    pub fn remove_repo(&mut self, ctx: &egui::Context, url: String) {
+        let Some(host) = self.host.clone() else {
+            return;
+        };
+        self.spawn_job(ctx, async move {
+            match host.remove_repo(&url).await {
+                Ok(true) => Msg::Status(format!("repositorio quitado: {url}")),
+                Ok(false) => Msg::Status("el host no encontró ese repositorio".to_string()),
+                Err(error) => Msg::Error(format!("{error}")),
+            }
+        });
+        self.load_repos(ctx);
+    }
+
+    pub fn install_plugin(&mut self, ctx: &egui::Context, internal_name: String) {
+        let Some(host) = self.host.clone() else {
+            return;
+        };
+        self.spawn_job(ctx, async move {
+            match host.install_plugin(&internal_name).await {
+                Ok(version) => Msg::Status(format!("instalada {internal_name} v{version}")),
+                Err(error) => Msg::Error(format!("{error}")),
+            }
+        });
+        self.load_extensions(ctx);
+    }
+
+    pub fn update_extensions(&mut self, ctx: &egui::Context) {
+        let Some(host) = self.host.clone() else {
+            return;
+        };
+        self.spawn_job(ctx, async move {
+            match host.update_extensions().await {
+                Ok(updated) if updated.is_empty() => Msg::Status("todo al día".to_string()),
+                Ok(updated) => Msg::Status(format!("actualizadas: {}", updated.join(", "))),
+                Err(error) => Msg::Error(format!("{error}")),
+            }
+        });
+        self.load_extensions(ctx);
+    }
+
+    pub fn uninstall_plugin(&mut self, ctx: &egui::Context, internal_name: String) {
+        let Some(host) = self.host.clone() else {
+            return;
+        };
+        self.spawn_job(ctx, async move {
+            match host.uninstall_plugin(&internal_name).await {
+                Ok(_) => Msg::Status(format!("desinstalada {internal_name}")),
+                Err(error) => Msg::Error(format!("{error}")),
+            }
+        });
+        self.load_extensions(ctx);
+    }
 
     /// Health check, then providers and plugins.
     pub fn connect(&mut self, ctx: &egui::Context) {
@@ -465,6 +591,7 @@ impl eframe::App for App {
             Tab::Home => panels::home_tab(self, ctx, ui),
             Tab::Search => panels::search_tab(self, ctx, ui),
             Tab::Live => panels::live_tab(self, ctx, ui),
+            Tab::Extensions => panels::extensions_tab(self, ctx, ui),
             Tab::Settings => panels::settings_tab(self, ctx, ui),
         });
     }

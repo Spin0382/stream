@@ -38,9 +38,11 @@ Rust. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
 ## Status
 
 Working: playlist and Xtream parsing, XMLTV guides, Stremio catalogs/meta/streams,
-the host protocol and client, settings, mpv playback, the CLI, a first egui UI.
-Next: extension/repository management in the UI, downloads, subtitles UI, the Kotlin
-app's look (glass, pills, themes), Flatpak/AppImage packaging.
+the host protocol and client, extension repository management (add, remove, install,
+update, uninstall, from the CLI and the UI), settings, mpv playback, the CLI, a first
+egui UI.
+Next: downloads, subtitles UI, the Kotlin app's look (glass, pills, themes),
+Flatpak/AppImage packaging.
 
 ## Build
 

@@ -34,6 +34,7 @@ import com.lagradost.cloudstream3.linux.Engine
 import com.lagradost.cloudstream3.linux.Network
 import com.lagradost.cloudstream3.linux.Platform
 import com.lagradost.cloudstream3.linux.PluginManager
+import com.lagradost.cloudstream3.linux.RepositoryManager
 import com.lagradost.cloudstream3.mapper
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
@@ -184,6 +185,64 @@ private suspend fun dispatch(method: String, params: JsonNode): Any? = when (met
         val found = Engine.allLinks(api, url)
         val subtitles = found.subtitles.map { subtitleJson(it) }
         mapOf("links" to found.links.map { linkJson(it, subtitles) })
+    }
+
+    "extensions.repos" -> mapOf(
+        "repos" to RepositoryManager.getRepositories().map { repo ->
+            mapOf("name" to repo.name, "url" to repo.url, "iconUrl" to repo.iconUrl)
+        },
+    )
+
+    "extensions.repos.add" -> {
+        val repo = RepositoryManager.addRepository(params.get("url")?.asText().orEmpty())
+        mapOf("repo" to mapOf("name" to repo.name, "url" to repo.url, "iconUrl" to repo.iconUrl))
+    }
+
+    "extensions.repos.remove" -> {
+        RepositoryManager.removeRepository(params.get("url")?.asText().orEmpty())
+        mapOf("removed" to true)
+    }
+
+    "extensions.available" -> {
+        val only = params.get("repo")?.asText()?.takeIf { it.isNotBlank() }
+        val installed = PluginManager.installed().associateBy { it.internalName }
+        val plugins = RepositoryManager.getRepositories()
+            .filter { only == null || it.url == only }
+            .flatMap { repositoryData -> RepositoryManager.getRepoPlugins(repositoryData).orEmpty() }
+            .map { wrapper ->
+                val plugin = wrapper.plugin
+                mapOf(
+                    "internalName" to plugin.internalName,
+                    "name" to plugin.name,
+                    "version" to plugin.version,
+                    "description" to plugin.description,
+                    "language" to plugin.language,
+                    "status" to plugin.status,
+                    "url" to plugin.url,
+                    "jarUrl" to plugin.jarUrl,
+                    "repositoryUrl" to wrapper.repositoryData.url,
+                    "installedVersion" to installed[plugin.internalName]?.version,
+                )
+            }
+        mapOf("plugins" to plugins)
+    }
+
+    "extensions.install" -> {
+        val internalName = params.get("internalName")?.asText().orEmpty()
+        val wrapper = RepositoryManager.getRepositories()
+            .flatMap { repositoryData -> RepositoryManager.getRepoPlugins(repositoryData).orEmpty() }
+            .firstOrNull { it.plugin.internalName.equals(internalName, ignoreCase = true) }
+            ?: error("extension '$internalName' is not in your repositories")
+        PluginManager.install(wrapper).getOrThrow()
+        mapOf("installed" to true, "version" to wrapper.plugin.version)
+    }
+
+    "extensions.update" -> mapOf("updated" to PluginManager.updateAll())
+
+    "extensions.uninstall" -> {
+        val internalName = params.get("internalName")?.asText().orEmpty()
+        PluginManager.uninstall(internalName)
+        mapOf("removed" to true)
     }
 
     else -> error("unknown method '$method'")
