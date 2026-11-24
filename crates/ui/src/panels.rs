@@ -85,8 +85,8 @@ fn row_block(app: &App, ui: &mut egui::Ui, row: &Row, open: &mut Option<MediaIte
     if row.items.is_empty() {
         return;
     }
-    ui.add_space(18.0);
-    ui.label(RichText::new(&row.title).size(21.0).strong());
+    ui.add_space(22.0);
+    ui.label(RichText::new(&row.title).size(26.0).color(theme::TEXT));
     ui.add_space(6.0);
     egui::ScrollArea::horizontal()
         .id_salt(&row.title)
