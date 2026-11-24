@@ -90,8 +90,6 @@ pub(crate) struct App {
     pub items: Vec<MediaItem>,
     /// The rows of the home screen.
     pub rows: Vec<Row>,
-    /// What the hero shows: the first item that has artwork.
-    pub hero: Option<MediaItem>,
     /// Decoded posters, by url.
     pub posters: HashMap<String, egui::TextureHandle>,
     /// Posters already asked for, so a frame does not queue them twice.
@@ -170,7 +168,6 @@ impl App {
             provider: None,
             items: Vec::new(),
             rows: Vec::new(),
-            hero: None,
             posters: HashMap::new(),
             queued_posters: HashSet::new(),
             poster_failures: HashMap::new(),
@@ -236,20 +233,18 @@ impl App {
                     }
                     self.status = format!("{} proveedores", providers.len());
                     self.providers = providers;
+                    // Nothing to press: the first provider fills the screen.
+                    if self.rows.is_empty() {
+                        if let (Some(ctx), Some(provider)) =
+                            (self.ctx.clone(), self.provider.clone())
+                        {
+                            self.load_home(&ctx, provider);
+                        }
+                    }
                 }
                 Msg::Rows(rows) => {
                     let count: usize = rows.iter().map(|row| row.items.len()).sum();
                     self.status = format!("{count} títulos");
-                    self.hero = rows
-                        .iter()
-                        .flat_map(|row| row.items.iter())
-                        .find(|item| item.background.is_some())
-                        .or_else(|| {
-                            rows.iter()
-                                .flat_map(|row| row.items.iter())
-                                .find(|item| item.poster.is_some())
-                        })
-                        .cloned();
                     self.rows = rows;
                 }
                 Msg::Poster(url, image) => {
@@ -343,11 +338,6 @@ impl App {
 
     fn request_row_posters(&mut self, ctx: &egui::Context) {
         let mut wanted: Vec<String> = Vec::new();
-        if let Some(hero) = &self.hero {
-            if let Some(background) = hero.background.as_ref().or(hero.poster.as_ref()) {
-                wanted.push(background.clone());
-            }
-        }
         for row in &self.rows {
             for item in &row.items {
                 if let Some(poster) = &item.poster {
@@ -690,6 +680,13 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.drain();
+
+        egui::SidePanel::left("nav")
+            .exact_width(84.0)
+            .resizable(false)
+            .show(ctx, |ui| {
+                panels::nav(self, ctx, ui);
+            });
 
         egui::TopBottomPanel::top("bar").show(ctx, |ui| {
             self.request_row_posters(ctx);

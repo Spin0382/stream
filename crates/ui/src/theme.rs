@@ -5,19 +5,16 @@
 
 use eframe::egui::{self, Align2, Color32, CornerRadius, FontId, Rect, Sense, Stroke, Vec2};
 
-pub(crate) const BG: Color32 = Color32::from_rgb(10, 10, 12);
-pub(crate) const SURFACE: Color32 = Color32::from_rgb(18, 18, 21);
-pub(crate) const CARD: Color32 = Color32::from_rgb(28, 28, 33);
-pub(crate) const ACCENT: Color32 = Color32::from_rgb(229, 9, 20);
+pub(crate) const BG: Color32 = Color32::from_rgb(15, 17, 32);
+pub(crate) const SURFACE: Color32 = Color32::from_rgb(24, 26, 44);
+pub(crate) const CARD: Color32 = Color32::from_rgb(32, 34, 56);
+pub(crate) const ACCENT: Color32 = Color32::from_rgb(124, 92, 255);
 pub(crate) const TEXT: Color32 = Color32::from_rgb(244, 244, 245);
 pub(crate) const MUTED: Color32 = Color32::from_rgb(150, 150, 158);
-pub(crate) const BORDER: Color32 = Color32::from_rgb(38, 38, 44);
+pub(crate) const BORDER: Color32 = Color32::from_rgb(44, 47, 78);
 
 /// Poster card size, and the taller one used by the first row.
-pub(crate) const CARD_SIZE: Vec2 = Vec2::new(132.0, 198.0);
-
-/// Room under a poster for its title and year.
-const CAPTION_HEIGHT: f32 = 30.0;
+pub(crate) const CARD_SIZE: Vec2 = Vec2::new(137.0, 195.0);
 
 pub(crate) fn install(ctx: &egui::Context) {
     let mut style = (*ctx.style()).clone();
@@ -90,45 +87,46 @@ pub(crate) fn poster_card(
     ui: &mut egui::Ui,
     texture: Option<&egui::TextureHandle>,
     title: &str,
-    subtitle: Option<&str>,
 ) -> egui::Response {
-    let (outer, response) =
-        ui.allocate_exact_size(CARD_SIZE + Vec2::new(0.0, CAPTION_HEIGHT), Sense::click());
-    let art = Rect::from_min_size(outer.min, CARD_SIZE);
+    let (rect, response) = ui.allocate_exact_size(CARD_SIZE, Sense::click());
     let painter = ui.painter();
 
-    painter.rect_filled(art, CornerRadius::same(6), CARD);
+    painter.rect_filled(rect, CornerRadius::same(8), CARD);
     if let Some(texture) = texture {
         painter.image(
             texture.id(),
-            art,
+            rect,
             Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
             Color32::WHITE,
         );
     }
 
     if response.hovered() {
-        painter.rect_filled(
-            art,
-            CornerRadius::same(6),
-            Color32::from_rgba_unmultiplied(0, 0, 0, 100),
+        let strip = Rect::from_min_max(
+            egui::pos2(rect.left(), rect.bottom() - 46.0),
+            rect.right_bottom(),
         );
-        painter.rect_stroke(
-            art,
-            CornerRadius::same(6),
-            Stroke::new(1.5_f32, TEXT),
-            egui::StrokeKind::Inside,
+        painter.rect_filled(
+            strip,
+            CornerRadius::same(8),
+            Color32::from_rgba_unmultiplied(8, 9, 18, 210),
         );
         painter.text(
-            art.center(),
-            Align2::CENTER_CENTER,
-            "▶",
-            FontId::proportional(26.0),
+            egui::pos2(rect.left() + 10.0, rect.bottom() - 10.0),
+            Align2::LEFT_BOTTOM,
+            fit(title, 19),
+            FontId::proportional(12.5),
             TEXT,
+        );
+        painter.rect_stroke(
+            rect,
+            CornerRadius::same(8),
+            Stroke::new(1.0_f32, ACCENT),
+            egui::StrokeKind::Inside,
         );
     } else if texture.is_none() {
         painter.text(
-            art.center(),
+            rect.center(),
             Align2::CENTER_CENTER,
             "…",
             FontId::proportional(16.0),
@@ -136,27 +134,10 @@ pub(crate) fn poster_card(
         );
     }
 
-    painter.text(
-        egui::pos2(outer.left(), art.bottom() + 4.0),
-        Align2::LEFT_TOP,
-        fit(title, 20),
-        FontId::proportional(12.0),
-        if response.hovered() { TEXT } else { MUTED },
-    );
-    if let Some(subtitle) = subtitle {
-        painter.text(
-            egui::pos2(outer.left(), art.bottom() + 18.0),
-            Align2::LEFT_TOP,
-            subtitle,
-            FontId::proportional(10.5),
-            Color32::from_rgb(110, 110, 118),
-        );
-    }
-
     response
 }
 
-/// The small red button the hero uses for the main action.
+/// The main action of a form.
 pub(crate) fn primary_button(ui: &mut egui::Ui, text: &str) -> egui::Response {
     ui.add(
         egui::Button::new(egui::RichText::new(text).strong().color(TEXT))
