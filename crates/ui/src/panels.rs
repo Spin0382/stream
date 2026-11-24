@@ -230,7 +230,8 @@ pub fn live_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
                     .and_then(|guide| {
                         guide
                             .on_channel(channel.tvg_id.as_deref().unwrap_or(""))
-                            .next()
+                            .first()
+                            .copied()
                     })
                     .map(|programme| format!("{} · {}", programme.time_label(), programme.title))
                     .unwrap_or_default();
