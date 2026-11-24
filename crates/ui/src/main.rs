@@ -8,6 +8,7 @@ use eframe::egui;
 
 mod app;
 mod panels;
+mod theme;
 
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {

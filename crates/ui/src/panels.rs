@@ -1,174 +1,229 @@
-//! Rendering of the five tabs and the details side panel.
+//! The screen: a top bar, a hero and horizontal rows of posters.
 //!
-//! Deliberately plain egui: lists and buttons. The Kotlin app's look (liquid glass,
-//! pills, animations) is a later stage; getting sources, links and playback right
-//! comes first.
+//! Dark surface, red accent, artwork first. Live TV, extensions and settings keep
+//! plain lists, because they are worked through rather than browsed.
 
-use crate::app::{App, Tab};
-use eframe::egui;
+use crate::app::{App, Row, Tab};
+use crate::theme;
+use eframe::egui::{self, Align2, Color32, CornerRadius, FontId, Rect, RichText, Sense, Vec2};
 use streamgoat_core::live::filter_channels;
-use streamgoat_core::model::{MediaKind, StreamLink};
+use streamgoat_core::model::{MediaItem, StreamLink};
 
 pub(crate) fn top_bar(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
-        ui.heading("Stream Goat");
-        ui.separator();
+        theme::logo(ui);
+        ui.add_space(18.0);
         for tab in Tab::ALL {
-            if ui.selectable_label(app.tab == tab, tab.title()).clicked() {
+            let selected = app.tab == tab;
+            let text = RichText::new(tab.title()).size(14.0).color(if selected {
+                theme::TEXT
+            } else {
+                theme::MUTED
+            });
+            let response = ui.add(egui::Label::new(text).sense(Sense::click()));
+            if selected {
+                ui.painter().line_segment(
+                    [
+                        egui::pos2(response.rect.left(), response.rect.bottom() + 2.0),
+                        egui::pos2(response.rect.right(), response.rect.bottom() + 2.0),
+                    ],
+                    egui::Stroke::new(2.0, theme::ACCENT),
+                );
+            }
+            if response.clicked() {
                 app.tab = tab;
             }
         }
-        ui.separator();
-        if app.busy > 0 {
-            ui.spinner();
-            ui.label("trabajando…");
-        } else {
-            ui.label(&app.status);
+        ui.add_space(18.0);
+
+        let search = ui.add(
+            egui::TextEdit::singleline(&mut app.search)
+                .hint_text("Buscar")
+                .desired_width(220.0),
+        );
+        let enter = search.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
+        if enter {
+            app.tab = Tab::Search;
+            app.search(ctx);
         }
+
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let connected = app.host.is_some() && !app.providers.is_empty();
-            let label = if connected {
-                "Host conectado"
+            if app.busy > 0 {
+                ui.spinner();
             } else {
-                "Conectar host"
+                ui.label(RichText::new(&app.status).small().color(theme::MUTED));
+            }
+            let connected = !app.providers.is_empty();
+            let colour = if connected {
+                theme::ACCENT
+            } else {
+                theme::MUTED
             };
-            if ui.button(label).clicked() {
+            let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), Sense::hover());
+            ui.painter().circle_filled(rect.center(), 4.0, colour);
+            if ui
+                .add(
+                    egui::Label::new(RichText::new("Host").small().color(theme::MUTED))
+                        .sense(Sense::click()),
+                )
+                .on_hover_text(if connected {
+                    "host conectado"
+                } else {
+                    "pulsa para conectar"
+                })
+                .clicked()
+            {
                 app.connect(ctx);
             }
         });
     });
-
-    if let Some(error) = app.error.clone() {
-        ui.horizontal(|ui| {
-            ui.colored_label(egui::Color32::from_rgb(220, 90, 90), format!("⚠ {error}"));
-            if ui.small_button("descartar").clicked() {
-                app.error = None;
-            }
-        });
-    }
 }
 
 pub(crate) fn home_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
-    ui.horizontal(|ui| {
-        if app.providers.is_empty() {
-            ui.label("Sin providers: arranca el host de extensiones y pulsa Conectar host.");
-        } else {
-            let current = app
-                .provider
-                .as_ref()
-                .and_then(|id| {
-                    app.providers
-                        .iter()
-                        .find(|provider| &provider.id == id)
-                        .map(|provider| provider.name.clone())
-                })
-                .unwrap_or_else(|| "Elige provider".to_string());
-            egui::ComboBox::from_id_salt("provider")
-                .selected_text(current)
-                .show_ui(ui, |ui| {
-                    let ids: Vec<(String, String)> = app
-                        .providers
-                        .iter()
-                        .map(|provider| (provider.id.clone(), provider.name.clone()))
-                        .collect();
-                    for (id, name) in ids {
-                        ui.selectable_value(&mut app.provider, Some(id), name);
-                    }
-                });
-            if ui.button("Cargar inicio").clicked() {
-                if let Some(provider) = app.provider.clone() {
-                    app.load_home(ctx, provider);
-                }
-            }
-        }
-        if ui.button("Cargar add-ons").clicked() {
-            app.load_addons(ctx);
-        }
-    });
-    ui.separator();
+    let mut open: Option<MediaItem> = None;
 
-    ui.horizontal(|ui| {
-        ui.small(format!(
-            "{} providers · {} add-ons · {} tarjetas",
-            app.providers.len(),
-            app.settings.addons.len(),
-            app.items.len()
-        ));
-    });
-
-    let mut clicked = None;
-    egui::ScrollArea::vertical().show(ui, |ui| {
-        ui.horizontal_wrapped(|ui| {
-            for (index, item) in app.items.iter().enumerate() {
-                let kind = match item.kind {
-                    MediaKind::Movie => "🎬",
-                    MediaKind::Series => "📺",
-                    MediaKind::Anime => "🌸",
-                    MediaKind::Live => "📡",
-                    MediaKind::Other => "▪",
-                };
-                let text = format!("{kind} {}", item.name);
-                if ui
-                    .add(egui::Button::new(text).min_size(egui::vec2(200.0, 34.0)))
-                    .on_hover_text(format!(
-                        "{}\n{}",
-                        item.provider.clone().unwrap_or_default(),
-                        item.description.clone().unwrap_or_default()
-                    ))
-                    .clicked()
-                {
-                    clicked = Some(index);
-                }
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            if let Some(hero) = app.hero.clone() {
+                hero_block(app, ui, &hero, &mut open);
+            } else {
+                ui.add_space(24.0);
+                ui.label(
+                    RichText::new("Carga los add-ons de Stremio desde Ajustes y pulsa Cargar.")
+                        .color(theme::MUTED),
+                );
             }
+
+            for row in &app.rows {
+                row_block(app, ui, row, &mut open);
+            }
+            ui.add_space(24.0);
         });
-    });
 
-    if let Some(index) = clicked {
-        if let Some(item) = app.items.get(index).cloned() {
-            app.open_item(ctx, item);
-        }
+    if let Some(item) = open {
+        app.open_item(ctx, item);
     }
 }
 
+fn hero_block(app: &App, ui: &mut egui::Ui, hero: &MediaItem, open: &mut Option<MediaItem>) {
+    let width = ui.available_width();
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(width, 320.0), Sense::hover());
+    let painter = ui.painter();
+    painter.rect_filled(rect, CornerRadius::same(10), theme::SURFACE);
+
+    let artwork = hero.background.as_ref().or(hero.poster.as_ref());
+    if let Some(texture) = artwork.and_then(|url| app.posters.get(url)) {
+        painter.image(
+            texture.id(),
+            rect,
+            Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+            Color32::WHITE,
+        );
+    }
+    // Dark scrim so the title reads over any artwork.
+    painter.rect_filled(
+        rect,
+        CornerRadius::same(10),
+        Color32::from_rgba_unmultiplied(8, 8, 10, 190),
+    );
+
+    let left = rect.left() + 28.0;
+    let mut baseline = rect.bottom() - 96.0;
+    if let Some(poster) = hero.poster.as_ref().and_then(|url| app.posters.get(url)) {
+        let poster_rect =
+            Rect::from_min_size(egui::pos2(left, baseline - 130.0), Vec2::new(88.0, 132.0));
+        painter.image(
+            poster.id(),
+            poster_rect,
+            Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+            Color32::WHITE,
+        );
+        baseline = poster_rect.bottom();
+    }
+
+    let meta = match hero.year {
+        Some(year) => format!("{year}"),
+        None => String::new(),
+    };
+    if !meta.is_empty() {
+        painter.text(
+            egui::pos2(left, baseline - 46.0),
+            Align2::LEFT_BOTTOM,
+            meta,
+            FontId::proportional(13.0),
+            theme::MUTED,
+        );
+    }
+    painter.text(
+        egui::pos2(left, baseline - 22.0),
+        Align2::LEFT_BOTTOM,
+        &hero.name,
+        FontId::proportional(30.0),
+        theme::TEXT,
+    );
+
+    let button = Rect::from_min_size(egui::pos2(left, baseline + 10.0), Vec2::new(140.0, 34.0));
+    let response = ui.put(
+        button,
+        egui::Button::new(RichText::new("Ver detalles").strong().color(theme::TEXT))
+            .fill(theme::ACCENT)
+            .corner_radius(CornerRadius::same(4)),
+    );
+    if response.clicked() {
+        *open = Some(hero.clone());
+    }
+}
+
+fn row_block(app: &App, ui: &mut egui::Ui, row: &Row, open: &mut Option<MediaItem>) {
+    if row.items.is_empty() {
+        return;
+    }
+    ui.add_space(20.0);
+    ui.label(RichText::new(&row.title).size(17.0).strong());
+    ui.add_space(2.0);
+    egui::ScrollArea::horizontal()
+        .id_salt(&row.title)
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                for item in &row.items {
+                    let texture = item.poster.as_ref().and_then(|url| app.posters.get(url));
+                    let year = item.year.map(|year| year.to_string());
+                    let response = theme::poster_card(ui, texture, &item.name, year.as_deref());
+                    if response.clicked() {
+                        *open = Some(item.clone());
+                    }
+                }
+            });
+        });
+}
+
 pub(crate) fn search_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
-    ui.horizontal(|ui| {
-        let response = ui.add(
-            egui::TextEdit::singleline(&mut app.search)
-                .hint_text("Título, serie, anime…")
-                .desired_width(320.0),
-        );
-        let enter = response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
-        if ui.button("Buscar").clicked() || enter {
-            app.search(ctx);
-        }
-        ui.label(
-            app.provider
-                .clone()
-                .unwrap_or_else(|| "búsqueda rápida".to_string()),
-        );
-    });
-    ui.separator();
-
-    let mut clicked = None;
-    egui::ScrollArea::vertical().show(ui, |ui| {
-        for (index, item) in app.items.iter().enumerate() {
-            if ui
-                .button(format!(
-                    "{} - {}",
-                    item.name,
-                    item.provider.clone().unwrap_or_default()
-                ))
-                .clicked()
-            {
-                clicked = Some(index);
+    let mut open: Option<MediaItem> = None;
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            if app.items.is_empty() {
+                ui.add_space(24.0);
+                ui.label(
+                    RichText::new("Busca arriba para llenar esta pantalla.").color(theme::MUTED),
+                );
+                return;
             }
-        }
-    });
+            ui.horizontal_wrapped(|ui| {
+                for item in &app.items {
+                    let texture = item.poster.as_ref().and_then(|url| app.posters.get(url));
+                    let year = item.year.map(|year| year.to_string());
+                    let response = theme::poster_card(ui, texture, &item.name, year.as_deref());
+                    if response.clicked() {
+                        open = Some(item.clone());
+                    }
+                }
+            });
+        });
 
-    if let Some(index) = clicked {
-        if let Some(item) = app.items.get(index).cloned() {
-            app.open_item(ctx, item);
-        }
+    if let Some(item) = open {
+        app.open_item(ctx, item);
     }
 }
 
@@ -182,7 +237,10 @@ pub(crate) fn live_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
             .collect();
 
         if names.is_empty() {
-            ui.label("Añade una lista M3U o un login Xtream en Ajustes.");
+            ui.label(
+                RichText::new("Añade una lista M3U o un login Xtream en Ajustes.")
+                    .color(theme::MUTED),
+            );
         } else {
             let selected = names
                 .get(app.live_index)
@@ -205,23 +263,21 @@ pub(crate) fn live_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
             }
         }
 
-        ui.separator();
-        ui.label("filtrar:");
+        ui.add_space(12.0);
         ui.add(
             egui::TextEdit::singleline(&mut app.channel_filter)
-                .hint_text("nombre o grupo")
+                .hint_text("Filtrar canales")
                 .desired_width(200.0),
         );
     });
-    ui.separator();
 
     let filter = app.channel_filter.clone();
     let visible = filter_channels(&app.channels, &filter);
     let now = chrono_now();
+    let mut clicked_url: Option<String> = None;
 
-    let mut play: Option<usize> = None;
     egui::ScrollArea::vertical()
-        .max_height(ui.available_height() * 0.65)
+        .auto_shrink([false, false])
         .show(ui, |ui| {
             for channel in &visible {
                 let programme = app
@@ -235,102 +291,109 @@ pub(crate) fn live_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
                     })
                     .map(|programme| format!("{} · {}", programme.time_label(), programme.title))
                     .unwrap_or_default();
-                let label = format!(
-                    "{:<38} {:<18} {}",
-                    channel.name,
-                    channel.group.clone().unwrap_or_default(),
-                    programme
-                );
-                if ui.selectable_label(false, label).clicked() {
-                    play = Some(
-                        app.channels
-                            .iter()
-                            .position(|c| c.url == channel.url)
-                            .unwrap_or(0),
-                    );
+
+                let (rect, response) =
+                    ui.allocate_exact_size(Vec2::new(ui.available_width(), 34.0), Sense::click());
+                let painter = ui.painter();
+                if response.hovered() {
+                    painter.rect_filled(rect, CornerRadius::same(4), theme::CARD);
                 }
+                painter.text(
+                    egui::pos2(rect.left() + 8.0, rect.center().y),
+                    Align2::LEFT_CENTER,
+                    &channel.name,
+                    FontId::proportional(14.0),
+                    theme::TEXT,
+                );
+                painter.text(
+                    egui::pos2(rect.right() - 8.0, rect.center().y),
+                    Align2::RIGHT_CENTER,
+                    if programme.is_empty() {
+                        channel.group.clone().unwrap_or_default()
+                    } else {
+                        programme
+                    },
+                    FontId::proportional(12.0),
+                    theme::MUTED,
+                );
+                if response.clicked() {
+                    clicked_url = Some(channel.url.clone());
+                }
+            }
+            if visible.is_empty() && !app.channels.is_empty() {
+                ui.label(RichText::new("Ningún canal coincide.").color(theme::MUTED));
             }
         });
 
-    if let Some(index) = play {
-        let link = app.channels.get(index).map(|channel| {
+    if let Some(url) = clicked_url {
+        if let Some(channel) = app.channels.iter().find(|channel| channel.url == url) {
             let mut link = StreamLink::new(&channel.url);
             link.name = Some(channel.name.clone());
             link.headers = channel.headers.clone();
-            link
-        });
-        if let Some(link) = link {
             app.play(&link);
         }
     }
 
     if let Some(guide) = app.guide.as_ref() {
-        ui.separator();
-        ui.label(format!(
-            "guía: {} canales, {} programas (hora del servidor {})",
-            guide.channels.len(),
-            guide.programmes.len(),
-            now
-        ));
+        ui.label(
+            RichText::new(format!(
+                "{} canales · {} programas · {}",
+                guide.channels.len(),
+                guide.programmes.len(),
+                now
+            ))
+            .small()
+            .color(theme::MUTED),
+        );
     }
 }
 
-/// Repositories on the left, the extensions they offer on the right.
 pub(crate) fn extensions_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
-        if ui
-            .button("Recargar")
-            .on_hover_text("repositorios y catálogo de extensiones")
-            .clicked()
-        {
+        if ui.button("Recargar").clicked() {
             app.load_extensions(ctx);
         }
-        if ui
-            .button("Actualizar todas")
-            .on_hover_text("actualiza las extensiones instaladas")
-            .clicked()
-        {
+        if ui.button("Actualizar todas").clicked() {
             app.update_extensions(ctx);
         }
-        ui.separator();
-        ui.label("filtrar:");
-        ui.add(egui::TextEdit::singleline(&mut app.ext_filter).desired_width(180.0));
+        ui.add_space(12.0);
+        ui.add(
+            egui::TextEdit::singleline(&mut app.ext_filter)
+                .hint_text("Filtrar extensiones")
+                .desired_width(200.0),
+        );
     });
-    ui.separator();
 
     ui.horizontal_top(|ui| {
-        // Repositories.
         ui.vertical(|ui| {
             ui.set_width(260.0);
-            ui.strong("Repositorios");
-            ui.add_space(4.0);
+            ui.label(RichText::new("Repositorios").strong());
             ui.horizontal(|ui| {
                 ui.add(
                     egui::TextEdit::singleline(&mut app.repo_buf)
                         .hint_text("url o código corto")
-                        .desired_width(180.0),
+                        .desired_width(170.0),
                 );
                 if ui.button("Añadir").clicked() {
                     app.add_repo(ctx);
                 }
             });
-            ui.add_space(6.0);
             let mut remove = None;
             egui::ScrollArea::vertical()
                 .id_salt("repos")
                 .max_height(ui.available_height())
                 .show(ui, |ui| {
                     if app.repos.is_empty() {
-                        ui.weak("sin repositorios: añade uno para ver extensiones");
+                        ui.label(RichText::new("Sin repositorios todavía.").color(theme::MUTED));
                     }
                     for repo in &app.repos {
                         ui.horizontal(|ui| {
-                            if ui.small_button("✖").on_hover_text("quitar").clicked() {
+                            if ui.small_button("✕").on_hover_text("quitar").clicked() {
                                 remove = Some(repo.url.clone());
                             }
                             ui.label(&repo.name);
                         });
-                        ui.weak(&repo.url);
+                        ui.label(RichText::new(&repo.url).small().color(theme::MUTED));
                         ui.add_space(4.0);
                     }
                 });
@@ -339,20 +402,26 @@ pub(crate) fn extensions_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::
             }
         });
 
-        ui.separator();
+        ui.add_space(12.0);
 
-        // Catalogue.
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
-                ui.strong("Extensiones");
-                ui.weak(format!("({})", app.available.len()));
-                ui.weak(format!("· {} add-ons", app.addons.len()));
+                ui.label(RichText::new("Extensiones").strong());
+                ui.label(
+                    RichText::new(format!(
+                        "{} · {} add-ons",
+                        app.available.len(),
+                        app.addons.len()
+                    ))
+                    .small()
+                    .color(theme::MUTED),
+                );
             });
-            ui.add_space(4.0);
             let needle = app.ext_filter.trim().to_ascii_lowercase();
             let mut action: Option<(bool, String)> = None;
             egui::ScrollArea::vertical()
                 .id_salt("available")
+                .auto_shrink([false, false])
                 .show(ui, |ui| {
                     let mut shown = 0usize;
                     for plugin in &app.available {
@@ -363,52 +432,62 @@ pub(crate) fn extensions_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::
                             continue;
                         }
                         shown += 1;
-                        egui::Frame::group(ui.style()).show(ui, |ui| {
-                            ui.horizontal(|ui| {
-                                ui.strong(&plugin.name);
-                                ui.label(format!("v{}", plugin.version));
-                                ui.weak(plugin.status_label());
-                                if let Some(language) = &plugin.language {
-                                    ui.weak(language);
-                                }
-                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
-                                        let installed = plugin.is_installed();
-                                        let outdated = plugin.update_available();
-                                        let update = ui.add_enabled(
-                                            installed && outdated,
-                                            egui::Button::new("Actualizar"),
+                        ui.horizontal(|ui| {
+                            ui.vertical(|ui| {
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new(&plugin.name).strong());
+                                    ui.label(
+                                        RichText::new(format!("v{}", plugin.version))
+                                            .small()
+                                            .color(theme::MUTED),
+                                    );
+                                    ui.label(
+                                        RichText::new(plugin.status_label())
+                                            .small()
+                                            .color(theme::MUTED),
+                                    );
+                                    if let Some(language) = &plugin.language {
+                                        ui.label(
+                                            RichText::new(language).small().color(theme::MUTED),
                                         );
-                                        let remove =
-                                            ui.add_enabled(installed, egui::Button::new("Quitar"));
-                                        let install = ui
-                                            .add_enabled(!installed, egui::Button::new("Instalar"));
-                                        if update.clicked() {
-                                            action = Some((true, plugin.internal_name.clone()));
-                                        } else if remove.clicked() {
-                                            action = Some((false, plugin.internal_name.clone()));
-                                        } else if install.clicked() {
-                                            action = Some((true, plugin.internal_name.clone()));
-                                        }
-                                    },
-                                );
+                                    }
+                                });
+                                if let Some(description) = &plugin.description {
+                                    ui.label(
+                                        RichText::new(description).small().color(theme::MUTED),
+                                    );
+                                }
                             });
-                            if let Some(description) = &plugin.description {
-                                ui.label(description);
-                            }
-                            if plugin.is_installed() {
-                                let installed = plugin.installed_version.unwrap_or_default();
-                                ui.weak(format!(
-                                    "instalada v{installed} · {}",
-                                    plugin.internal_name
-                                ));
-                            }
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let installed = plugin.is_installed();
+                                    let outdated = plugin.update_available();
+                                    let update = ui.add_enabled(
+                                        installed && outdated,
+                                        egui::Button::new("Actualizar"),
+                                    );
+                                    let remove =
+                                        ui.add_enabled(installed, egui::Button::new("Quitar"));
+                                    let install =
+                                        ui.add_enabled(!installed, egui::Button::new("Instalar"));
+                                    if update.clicked() {
+                                        action = Some((true, plugin.internal_name.clone()));
+                                    } else if remove.clicked() {
+                                        action = Some((false, plugin.internal_name.clone()));
+                                    } else if install.clicked() {
+                                        action = Some((true, plugin.internal_name.clone()));
+                                    }
+                                },
+                            );
                         });
-                        ui.add_space(4.0);
+                        ui.separator();
                     }
                     if shown == 0 {
-                        ui.weak("nada que mostrar todavía");
+                        ui.label(
+                            RichText::new("Añade un repositorio y recarga para ver extensiones.")
+                                .color(theme::MUTED),
+                        );
                     }
                 });
             if let Some((install, internal_name)) = action {
@@ -423,150 +502,207 @@ pub(crate) fn extensions_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::
 }
 
 pub(crate) fn settings_tab(app: &mut App, _ctx: &egui::Context, ui: &mut egui::Ui) {
-    egui::ScrollArea::vertical().show(ui, |ui| {
-        ui.heading("Extensión host (CloudStream)");
-        ui.label("El host es un proceso Java aparte; aquí solo se le dice dónde escucha.");
-        egui::Grid::new("host_grid").num_columns(2).show(ui, |ui| {
-            ui.label("Dirección");
-            ui.add(
-                egui::TextEdit::singleline(&mut app.host_addr_buf)
-                    .hint_text("127.0.0.1:9000")
-                    .desired_width(320.0),
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            ui.label(RichText::new("Host de extensiones").size(18.0).strong());
+            ui.label(
+                RichText::new(
+                    "El host es un proceso Java aparte; aquí solo se le dice dónde escucha.",
+                )
+                .small()
+                .color(theme::MUTED),
             );
-            ui.end_row();
-
-            ui.label("Token");
-            ui.add(
-                egui::TextEdit::singleline(&mut app.host_token_buf)
-                    .hint_text("el que imprime el host al arrancar")
-                    .password(true)
-                    .desired_width(320.0),
-            );
-            ui.end_row();
-
-            ui.label("Comando");
-            ui.add(
-                egui::TextEdit::singleline(&mut app.host_command_buf)
-                    .hint_text("java -jar /opt/streamgoat/streamgoat-host.jar")
-                    .desired_width(420.0),
-            );
-            ui.end_row();
-        });
-
-        ui.add_space(10.0);
-        ui.heading("Stremio");
-        ui.label("Un add-on por línea: https://…/manifest.json");
-        ui.add(
-            egui::TextEdit::multiline(&mut app.addon_buf)
-                .desired_rows(3)
-                .desired_width(f32::INFINITY),
-        );
-
-        ui.add_space(10.0);
-        ui.heading("Live TV");
-        ui.label("Una fuente por línea:");
-        ui.label("  m3u | Nombre | https://…/lista.m3u");
-        ui.label("  xtream | Nombre | http://panel:8080 | usuario | contraseña");
-        ui.add(
-            egui::TextEdit::multiline(&mut app.live_buf)
-                .desired_rows(4)
-                .desired_width(f32::INFINITY),
-        );
-
-        ui.add_space(10.0);
-        ui.heading("Reproductor");
-        egui::Grid::new("player_grid")
-            .num_columns(2)
-            .show(ui, |ui| {
-                ui.label("mpv");
+            egui::Grid::new("host_grid").num_columns(2).show(ui, |ui| {
+                ui.label("Dirección");
                 ui.add(
-                    egui::TextEdit::singleline(&mut app.player_buf)
-                        .hint_text("mpv")
+                    egui::TextEdit::singleline(&mut app.host_addr_buf)
+                        .hint_text("127.0.0.1:9000")
                         .desired_width(320.0),
+                );
+                ui.end_row();
+
+                ui.label("Token");
+                ui.add(
+                    egui::TextEdit::singleline(&mut app.host_token_buf)
+                        .hint_text("el que imprime el host al arrancar")
+                        .password(true)
+                        .desired_width(320.0),
+                );
+                ui.end_row();
+
+                ui.label("Comando");
+                ui.add(
+                    egui::TextEdit::singleline(&mut app.host_command_buf)
+                        .hint_text("java -jar /opt/streamgoat/streamgoat-host.jar")
+                        .desired_width(420.0),
                 );
                 ui.end_row();
             });
 
-        ui.add_space(14.0);
-        ui.horizontal(|ui| {
-            if ui.button("Guardar ajustes").clicked() {
-                app.save_settings();
-                app.live_buf =
-                    crate::app::format_live_sources(&crate::app::parse_live_sources(&app.live_buf));
-            }
-            if ui.button("Recargar").clicked() {
-                let settings = app.store.load_settings();
-                app.addon_buf = settings.addons.join("\n");
-                app.live_buf = crate::app::format_live_sources(&settings.live_sources);
-                app.host_addr_buf = settings.host_addr.clone().unwrap_or_default();
-                app.host_token_buf = settings.host_token.clone().unwrap_or_default();
-                app.host_command_buf = settings.host_command.clone().unwrap_or_default();
-                app.player_buf = settings.player_command.clone().unwrap_or_default();
-                app.settings = settings;
-            }
-        });
+            ui.add_space(16.0);
+            ui.label(RichText::new("Stremio").size(18.0).strong());
+            ui.label(
+                RichText::new("Un add-on por línea: https://…/manifest.json")
+                    .small()
+                    .color(theme::MUTED),
+            );
+            ui.add(
+                egui::TextEdit::multiline(&mut app.addon_buf)
+                    .desired_rows(3)
+                    .desired_width(f32::INFINITY),
+            );
 
-        ui.add_space(8.0);
-        ui.small(format!(
-            "ajustes en {}/settings.json",
-            app.store.root().display()
-        ));
-    });
+            ui.add_space(16.0);
+            ui.label(RichText::new("Live TV").size(18.0).strong());
+            ui.label(
+                RichText::new("Una fuente por línea:")
+                    .small()
+                    .color(theme::MUTED),
+            );
+            ui.label(
+                RichText::new("  m3u | Nombre | https://…/lista.m3u")
+                    .small()
+                    .color(theme::MUTED),
+            );
+            ui.label(
+                RichText::new("  xtream | Nombre | http://panel:8080 | usuario | contraseña")
+                    .small()
+                    .color(theme::MUTED),
+            );
+            ui.add(
+                egui::TextEdit::multiline(&mut app.live_buf)
+                    .desired_rows(4)
+                    .desired_width(f32::INFINITY),
+            );
+
+            ui.add_space(16.0);
+            ui.label(RichText::new("Reproductor").size(18.0).strong());
+            ui.add(
+                egui::TextEdit::singleline(&mut app.player_buf)
+                    .hint_text("mpv")
+                    .desired_width(320.0),
+            );
+
+            ui.add_space(18.0);
+            ui.horizontal(|ui| {
+                if theme::primary_button(ui, "Guardar").clicked() {
+                    app.save_settings();
+                    app.live_buf = crate::app::format_live_sources(
+                        &crate::app::parse_live_sources(&app.live_buf),
+                    );
+                }
+                if ui.button("Recargar").clicked() {
+                    let settings = app.store.load_settings();
+                    app.addon_buf = settings.addons.join("\n");
+                    app.live_buf = crate::app::format_live_sources(&settings.live_sources);
+                    app.host_addr_buf = settings.host_addr.clone().unwrap_or_default();
+                    app.host_token_buf = settings.host_token.clone().unwrap_or_default();
+                    app.host_command_buf = settings.host_command.clone().unwrap_or_default();
+                    app.player_buf = settings.player_command.clone().unwrap_or_default();
+                    app.settings = settings;
+                }
+            });
+
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new(format!(
+                    "ajustes en {}/settings.json",
+                    app.store.root().display()
+                ))
+                .small()
+                .color(theme::MUTED),
+            );
+            ui.add_space(24.0);
+        });
 }
 
 pub(crate) fn details_panel(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
     let Some(details) = app.details.clone() else {
         return;
     };
+    if let Some(poster) = details.poster.clone() {
+        app.request_poster(ctx, &poster);
+    }
 
-    ui.horizontal(|ui| {
-        ui.heading(&details.name);
-        if ui.small_button("cerrar").clicked() {
-            app.details = None;
-            app.links.clear();
-        }
-    });
-    if let Some(year) = details.year {
-        ui.small(format!("{year}"));
-    }
-    if let Some(description) = &details.description {
-        ui.label(description);
-    }
-    if let Some(poster) = &details.poster {
-        ui.small(poster);
-    }
-    ui.separator();
-
-    ui.label(format!("Fuentes ({})", app.links.len()));
+    let mut close = false;
     let mut chosen: Option<usize> = None;
+    let mut episode: Option<String> = None;
+
     egui::ScrollArea::vertical()
-        .max_height(220.0)
+        .auto_shrink([false, false])
         .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(&details.name).size(20.0).strong());
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button("Cerrar").clicked() {
+                        close = true;
+                    }
+                });
+            });
+
+            if let Some(texture) = details.poster.as_ref().and_then(|url| app.posters.get(url)) {
+                ui.add_space(8.0);
+                ui.add(
+                    egui::Image::new(egui::load::SizedTexture::new(
+                        texture.id(),
+                        Vec2::new(200.0, 300.0),
+                    ))
+                    .corner_radius(CornerRadius::same(6)),
+                );
+            }
+
+            ui.add_space(6.0);
+            let mut meta: Vec<String> = Vec::new();
+            if let Some(year) = details.year {
+                meta.push(year.to_string());
+            }
+            if let Some(source) = &details.source {
+                meta.push(source.clone());
+            }
+            if !meta.is_empty() {
+                ui.label(RichText::new(meta.join(" · ")).small().color(theme::MUTED));
+            }
+            if let Some(description) = &details.description {
+                ui.add_space(4.0);
+                ui.label(description);
+            }
+
+            ui.add_space(12.0);
+            ui.label(RichText::new(format!("Fuentes · {}", app.links.len())).strong());
+            if app.links.is_empty() {
+                ui.label(
+                    RichText::new("Cargando fuentes…")
+                        .small()
+                        .color(theme::MUTED),
+                );
+            }
             for (index, link) in app.links.iter().enumerate() {
                 if ui.button(format!("▶ {}", link.label())).clicked() {
                     chosen = Some(index);
                 }
             }
-        });
 
-    if !details.episodes.is_empty() {
-        ui.separator();
-        ui.label(format!("Episodios ({})", details.episodes.len()));
-        let mut episode_url: Option<String> = None;
-        egui::ScrollArea::vertical()
-            .max_height(240.0)
-            .show(ui, |ui| {
-                for episode in &details.episodes {
-                    if ui.button(episode.label()).clicked() {
-                        episode_url = Some(episode.url.clone());
+            if !details.episodes.is_empty() {
+                ui.add_space(12.0);
+                ui.label(RichText::new(format!("Episodios · {}", details.episodes.len())).strong());
+                for episode_item in &details.episodes {
+                    if ui.button(episode_item.label()).clicked() {
+                        episode = Some(episode_item.url.clone());
                     }
                 }
-            });
-        if let Some(url) = episode_url {
-            app.open_episode(ctx, url);
-        }
-    }
+            }
+            ui.add_space(20.0);
+        });
 
+    if close {
+        app.details = None;
+        app.links.clear();
+        return;
+    }
+    if let Some(url) = episode {
+        app.open_episode(ctx, url);
+    }
     if let Some(index) = chosen {
         if let Some(link) = app.links.get(index).cloned() {
             app.play(&link);
@@ -575,7 +711,6 @@ pub(crate) fn details_panel(app: &mut App, ctx: &egui::Context, ui: &mut egui::U
 }
 
 fn chrono_now() -> String {
-    // Only used in a label; UTC is fine and keeps the dependency list short.
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_secs())

@@ -4,6 +4,7 @@
 //! [`Msg`] back through a channel; the UI drains the channel each frame.
 
 use eframe::egui;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use streamgoat_core::host::{AvailablePlugin, HostClient, ProviderInfo, RepoInfo};
@@ -44,9 +45,20 @@ impl Tab {
     }
 }
 
+/// One horizontal strip of the home screen.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Row {
+    pub title: String,
+    pub items: Vec<MediaItem>,
+}
+
 pub(crate) enum Msg {
     Providers(Vec<ProviderInfo>),
     Repos(Vec<RepoInfo>),
+    Rows(Vec<Row>),
+    /// A decoded poster, ready to become a texture.
+    Poster(String, egui::ColorImage),
+    PosterFailed(String),
     Available(Vec<AvailablePlugin>),
     Items(Vec<MediaItem>),
     Details(Box<MediaItem>),
@@ -73,6 +85,16 @@ pub(crate) struct App {
     pub repo_buf: String,
     pub provider: Option<String>,
     pub items: Vec<MediaItem>,
+    /// The rows of the home screen.
+    pub rows: Vec<Row>,
+    /// What the hero shows: the first item that has artwork.
+    pub hero: Option<MediaItem>,
+    /// Decoded posters, by url.
+    pub posters: HashMap<String, egui::TextureHandle>,
+    /// Posters already asked for, so a frame does not queue them twice.
+    pub queued_posters: HashSet<String>,
+    /// The egui context, kept so a finished download can upload its texture.
+    pub ctx: Option<egui::Context>,
     pub details: Option<MediaItem>,
     pub links: Vec<StreamLink>,
 
@@ -125,10 +147,7 @@ impl App {
             .build()
             .expect("tokio runtime");
 
-        cc.egui_ctx.style_mut(|style| {
-            style.spacing.item_spacing = egui::vec2(8.0, 6.0);
-            style.spacing.button_padding = egui::vec2(10.0, 6.0);
-        });
+        crate::theme::install(&cc.egui_ctx);
 
         let mut app = App {
             store,
@@ -143,6 +162,11 @@ impl App {
             repo_buf: String::new(),
             provider: None,
             items: Vec::new(),
+            rows: Vec::new(),
+            hero: None,
+            posters: HashMap::new(),
+            queued_posters: HashSet::new(),
+            ctx: None,
             details: None,
             links: Vec::new(),
             search: String::new(),
@@ -163,6 +187,7 @@ impl App {
             rx,
             rt,
         };
+        app.ctx = Some(cc.egui_ctx.clone());
         if app.host.is_some() {
             app.connect(&cc.egui_ctx);
         }
@@ -198,6 +223,25 @@ impl App {
                     }
                     self.status = format!("{} proveedores", providers.len());
                     self.providers = providers;
+                }
+                Msg::Rows(rows) => {
+                    let count: usize = rows.iter().map(|row| row.items.len()).sum();
+                    self.status = format!("{count} títulos");
+                    self.hero = rows
+                        .iter()
+                        .flat_map(|row| row.items.iter())
+                        .find(|item| item.background.is_some() || item.poster.is_some())
+                        .cloned();
+                    self.rows = rows;
+                }
+                Msg::Poster(url, image) => {
+                    if let Some(ctx) = self.ctx.clone() {
+                        let texture = ctx.load_texture(&url, image, egui::TextureOptions::LINEAR);
+                        self.posters.insert(url, texture);
+                    }
+                }
+                Msg::PosterFailed(url) => {
+                    self.queued_posters.remove(&url);
                 }
                 Msg::Repos(repos) => {
                     self.repos = repos;
@@ -237,6 +281,53 @@ impl App {
     }
 
     // --- actions --------------------------------------------------------------
+
+    /// Asks for a poster once, if it is not cached or already queued.
+    pub(crate) fn request_poster(&mut self, ctx: &egui::Context, url: &str) {
+        if self.posters.contains_key(url) || !self.queued_posters.insert(url.to_string()) {
+            return;
+        }
+        let url = url.to_string();
+        let tx = self.tx.clone();
+        let ctx = ctx.clone();
+        self.rt.spawn(async move {
+            let msg = match streamgoat_core::http::fetch_bytes(&url).await {
+                Ok(bytes) => match image::load_from_memory(&bytes) {
+                    Ok(decoded) => {
+                        let rgba = decoded.to_rgba8();
+                        let size = [rgba.width() as usize, rgba.height() as usize];
+                        Msg::Poster(
+                            url,
+                            egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw()),
+                        )
+                    }
+                    Err(_) => Msg::PosterFailed(url),
+                },
+                Err(_) => Msg::PosterFailed(url),
+            };
+            let _ = tx.send(msg);
+            ctx.request_repaint();
+        });
+    }
+
+    fn request_row_posters(&mut self, ctx: &egui::Context) {
+        let mut wanted: Vec<String> = Vec::new();
+        if let Some(hero) = &self.hero {
+            if let Some(background) = hero.background.as_ref().or(hero.poster.as_ref()) {
+                wanted.push(background.clone());
+            }
+        }
+        for row in &self.rows {
+            for item in &row.items {
+                if let Some(poster) = &item.poster {
+                    wanted.push(poster.clone());
+                }
+            }
+        }
+        for url in wanted {
+            self.request_poster(ctx, &url);
+        }
+    }
 
     /// Repositories and every extension they offer.
     pub(crate) fn load_extensions(&mut self, ctx: &egui::Context) {
@@ -360,8 +451,9 @@ impl App {
         };
         self.spawn_job(ctx, async move {
             match host.home(&provider, 1).await {
-                Ok(page) => Msg::Items(
-                    page.items
+                Ok(page) => {
+                    let items: Vec<MediaItem> = page
+                        .items
                         .into_iter()
                         .map(|mut item| {
                             if item.provider.is_none() {
@@ -369,8 +461,12 @@ impl App {
                             }
                             item
                         })
-                        .collect(),
-                ),
+                        .collect();
+                    Msg::Rows(vec![Row {
+                        title: provider,
+                        items,
+                    }])
+                }
                 Err(error) => Msg::Error(format!("{error}")),
             }
         });
@@ -487,36 +583,41 @@ impl App {
             return;
         }
         self.spawn_job(ctx, async move {
-            let mut items = Vec::new();
+            let mut rows: Vec<Row> = Vec::new();
             let mut failures = 0usize;
             for spec in &specs {
-                match AddonClient::open(spec).await {
-                    Ok(addon) => {
-                        let Some(catalog) = addon.catalogs().first() else {
-                            continue;
-                        };
-                        let kind = catalog.kind.clone();
-                        let id = catalog.id.clone();
-                        let name = addon.manifest.name.clone();
-                        match addon.catalog(&kind, &id, &[]).await {
-                            Ok(mut found) => {
-                                for item in &mut found {
-                                    if item.provider.is_none() {
-                                        item.provider = Some(name.clone());
-                                    }
+                let Ok(addon) = AddonClient::open(spec).await else {
+                    failures += 1;
+                    continue;
+                };
+                for catalog in addon.catalogs().iter().take(4) {
+                    let kind = catalog.kind.clone();
+                    let id = catalog.id.clone();
+                    let title = catalog.title();
+                    match addon.catalog(&kind, &id, &[]).await {
+                        Ok(mut items) => {
+                            let name = addon.manifest.name.clone();
+                            for item in &mut items {
+                                if item.provider.is_none() {
+                                    item.provider = Some(name.clone());
                                 }
-                                items.extend(found);
                             }
-                            Err(_) => failures += 1,
+                            if items.is_empty() {
+                                continue;
+                            }
+                            rows.push(Row {
+                                title: format!("{title} · {name}"),
+                                items,
+                            });
                         }
+                        Err(_) => failures += 1,
                     }
-                    Err(_) => failures += 1,
                 }
             }
-            if items.is_empty() && failures > 0 {
+            if rows.is_empty() && failures > 0 {
                 Msg::Error("ningún add-on respondió".to_string())
             } else {
-                Msg::Items(items)
+                Msg::Rows(rows)
             }
         });
     }
@@ -557,6 +658,7 @@ impl eframe::App for App {
         self.drain();
 
         egui::TopBottomPanel::top("bar").show(ctx, |ui| {
+            self.request_row_posters(ctx);
             panels::top_bar(self, ctx, ui);
         });
 
