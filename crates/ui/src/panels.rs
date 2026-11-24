@@ -38,7 +38,7 @@ pub(crate) fn top_bar(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
 
         let search = ui.add(
             egui::TextEdit::singleline(&mut app.search)
-                .hint_text("Buscar")
+                .hint_text("Buscar títulos")
                 .desired_width(220.0),
         );
         let enter = search.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
@@ -50,7 +50,6 @@ pub(crate) fn top_bar(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if app.busy > 0 {
                 ui.spinner();
-            } else {
                 ui.label(RichText::new(&app.status).small().color(theme::MUTED));
             }
             let connected = !app.providers.is_empty();

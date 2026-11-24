@@ -93,6 +93,8 @@ pub(crate) struct App {
     pub posters: HashMap<String, egui::TextureHandle>,
     /// Posters already asked for, so a frame does not queue them twice.
     pub queued_posters: HashSet<String>,
+    /// Posters that failed once; retrying them every frame would hammer the host.
+    pub failed_posters: HashSet<String>,
     /// The egui context, kept so a finished download can upload its texture.
     pub ctx: Option<egui::Context>,
     pub details: Option<MediaItem>,
@@ -166,6 +168,7 @@ impl App {
             hero: None,
             posters: HashMap::new(),
             queued_posters: HashSet::new(),
+            failed_posters: HashSet::new(),
             ctx: None,
             details: None,
             links: Vec::new(),
@@ -234,7 +237,12 @@ impl App {
                     self.hero = rows
                         .iter()
                         .flat_map(|row| row.items.iter())
-                        .find(|item| item.background.is_some() || item.poster.is_some())
+                        .find(|item| item.background.is_some())
+                        .or_else(|| {
+                            rows.iter()
+                                .flat_map(|row| row.items.iter())
+                                .find(|item| item.poster.is_some())
+                        })
                         .cloned();
                     self.rows = rows;
                 }
@@ -245,7 +253,7 @@ impl App {
                     }
                 }
                 Msg::PosterFailed(url) => {
-                    self.queued_posters.remove(&url);
+                    self.failed_posters.insert(url);
                 }
                 Msg::Repos(repos) => {
                     self.repos = repos;
@@ -288,7 +296,10 @@ impl App {
 
     /// Asks for a poster once, if it is not cached or already queued.
     pub(crate) fn request_poster(&mut self, ctx: &egui::Context, url: &str) {
-        if self.posters.contains_key(url) || !self.queued_posters.insert(url.to_string()) {
+        if self.posters.contains_key(url)
+            || self.failed_posters.contains(url)
+            || !self.queued_posters.insert(url.to_string())
+        {
             return;
         }
         let url = url.to_string();
@@ -593,6 +604,7 @@ impl App {
         self.spawn_job(ctx, async move {
             let mut rows: Vec<Row> = Vec::new();
             let mut failures = 0usize;
+            let many_addons = specs.len() > 1;
             for spec in &specs {
                 let Ok(addon) = AddonClient::open(spec).await else {
                     failures += 1;
@@ -613,10 +625,12 @@ impl App {
                             if items.is_empty() {
                                 continue;
                             }
-                            rows.push(Row {
-                                title: format!("{title} · {name}"),
-                                items,
-                            });
+                            let title = if many_addons {
+                                format!("{title} · {kind} · {name}")
+                            } else {
+                                format!("{title} · {kind}")
+                            };
+                            rows.push(Row { title, items });
                         }
                         Err(_) => failures += 1,
                     }
