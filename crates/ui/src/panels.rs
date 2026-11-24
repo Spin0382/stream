@@ -374,17 +374,19 @@ pub(crate) fn extensions_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::
                                 ui.with_layout(
                                     egui::Layout::right_to_left(egui::Align::Center),
                                     |ui| {
-                                        if plugin.is_installed() && plugin.update_available() {
-                                            if ui.button("Actualizar").clicked() {
-                                                action = Some((true, plugin.internal_name.clone()));
-                                            }
-                                        }
                                         let installed = plugin.is_installed();
+                                        let outdated = plugin.update_available();
+                                        let update = ui.add_enabled(
+                                            installed && outdated,
+                                            egui::Button::new("Actualizar"),
+                                        );
                                         let remove =
                                             ui.add_enabled(installed, egui::Button::new("Quitar"));
                                         let install = ui
                                             .add_enabled(!installed, egui::Button::new("Instalar"));
-                                        if remove.clicked() {
+                                        if update.clicked() {
+                                            action = Some((true, plugin.internal_name.clone()));
+                                        } else if remove.clicked() {
                                             action = Some((false, plugin.internal_name.clone()));
                                         } else if install.clicked() {
                                             action = Some((true, plugin.internal_name.clone()));
