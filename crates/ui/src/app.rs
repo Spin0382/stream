@@ -4,6 +4,7 @@
 //! [`Msg`] back through a channel; the UI drains the channel each frame.
 
 use eframe::egui;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -43,6 +44,16 @@ impl Tab {
             Tab::Settings => "Ajustes",
         }
     }
+}
+
+/// What has been played recently, so the home screen can offer it again.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct HistoryEntry {
+    pub item: MediaItem,
+    #[serde(default)]
+    pub fraction: f32,
+    #[serde(default)]
+    pub played_at: i64,
 }
 
 /// How many posters download at once.
@@ -89,6 +100,8 @@ pub(crate) struct App {
     pub items: Vec<MediaItem>,
     /// The rows of the home screen.
     pub rows: Vec<Row>,
+    /// Recently played titles, newest first.
+    pub history: Vec<HistoryEntry>,
     /// Decoded posters, by url.
     pub posters: HashMap<String, egui::TextureHandle>,
     /// Posters already asked for, so a frame does not queue them twice.
@@ -152,6 +165,7 @@ impl App {
             .expect("tokio runtime");
 
         crate::theme::install(&cc.egui_ctx);
+        let history = app_history(&store);
 
         let mut app = App {
             store,
@@ -166,6 +180,7 @@ impl App {
             provider: None,
             items: Vec::new(),
             rows: Vec::new(),
+            history,
             posters: HashMap::new(),
             queued_posters: HashSet::new(),
             poster_failures: HashMap::new(),
@@ -297,6 +312,36 @@ impl App {
 
     // --- actions --------------------------------------------------------------
 
+    /// Puts a title at the top of the history and writes the file.
+    fn remember(&mut self, item: &MediaItem) {
+        let fraction = self
+            .history
+            .iter()
+            .find(|entry| entry.item.id == item.id)
+            .map(|entry| entry.fraction)
+            .unwrap_or(0.0);
+        self.history.retain(|entry| entry.item.id != item.id);
+        self.history.insert(
+            0,
+            HistoryEntry {
+                item: item.clone(),
+                fraction,
+                played_at: now_seconds(),
+            },
+        );
+        self.history.truncate(20);
+        save_history(&self.store, &self.history);
+    }
+
+    /// How far a title was watched, when that is known.
+    pub(crate) fn fraction_for(&self, id: &str) -> Option<f32> {
+        self.history
+            .iter()
+            .find(|entry| entry.item.id == id)
+            .map(|entry| entry.fraction)
+            .filter(|fraction| *fraction > 0.0)
+    }
+
     /// Asks for a poster once, if it is not cached or already queued.
     pub(crate) fn request_poster(&mut self, ctx: &egui::Context, url: &str) {
         if self.posters.contains_key(url)
@@ -341,6 +386,11 @@ impl App {
                 if let Some(poster) = &item.poster {
                     wanted.push(poster.clone());
                 }
+            }
+        }
+        for entry in &self.history {
+            if let Some(poster) = &entry.item.poster {
+                wanted.push(poster.clone());
             }
         }
         for url in wanted {
@@ -551,6 +601,9 @@ impl App {
     }
 
     pub(crate) fn play(&mut self, link: &StreamLink) {
+        if let Some(item) = self.details.clone() {
+            self.remember(&item);
+        }
         let player = self.settings.player_command.clone();
         match player::play_link(link, player.as_deref()) {
             Ok(()) => self.status = format!("reproduciendo {}", link.label()),
@@ -760,4 +813,32 @@ pub(crate) fn format_live_sources(sources: &[LiveSource]) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn history_path(store: &Store) -> std::path::PathBuf {
+    store.root().join("history.json")
+}
+
+fn app_history(store: &Store) -> Vec<HistoryEntry> {
+    let Ok(raw) = std::fs::read_to_string(history_path(store)) else {
+        return Vec::new();
+    };
+    serde_json::from_str(&raw).unwrap_or_default()
+}
+
+fn save_history(store: &Store, history: &[HistoryEntry]) {
+    let path = history_path(store);
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(raw) = serde_json::to_string_pretty(history) {
+        let _ = std::fs::write(path, raw);
+    }
+}
+
+fn now_seconds() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| i64::try_from(duration.as_secs()).unwrap_or_default())
+        .unwrap_or_default()
 }

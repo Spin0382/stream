@@ -87,6 +87,7 @@ pub(crate) fn poster_card(
     ui: &mut egui::Ui,
     texture: Option<&egui::TextureHandle>,
     title: &str,
+    fraction: Option<f32>,
 ) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(CARD_SIZE, Sense::click());
     let painter = ui.painter();
@@ -132,6 +133,22 @@ pub(crate) fn poster_card(
             FontId::proportional(16.0),
             MUTED,
         );
+    }
+
+    if let Some(fraction) = fraction {
+        let track = Rect::from_min_max(
+            egui::pos2(rect.left() + 2.0, rect.bottom() - 5.0),
+            egui::pos2(rect.right() - 2.0, rect.bottom() - 2.0),
+        );
+        painter.rect_filled(track, CornerRadius::same(2), Color32::from_white_alpha(60));
+        let filled = Rect::from_min_max(
+            track.left_top(),
+            egui::pos2(
+                track.left() + track.width() * fraction.clamp(0.0, 1.0),
+                track.bottom(),
+            ),
+        );
+        painter.rect_filled(filled, CornerRadius::same(2), ACCENT);
     }
 
     response

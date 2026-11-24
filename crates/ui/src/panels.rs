@@ -9,25 +9,29 @@ use eframe::egui::{self, Align2, CornerRadius, FontId, RichText, Sense, Vec2};
 use streamgoat_core::live::filter_channels;
 use streamgoat_core::model::{MediaItem, StreamLink};
 
-pub(crate) fn nav(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
-    ui.add_space(14.0);
+pub(crate) fn nav(app: &mut App, _ctx: &egui::Context, ui: &mut egui::Ui) {
+    ui.add_space(18.0);
     for tab in Tab::ALL {
         let selected = app.tab == tab;
-        let colour = if selected {
-            theme::ACCENT
-        } else {
-            theme::MUTED
-        };
-        let response = ui.add(
-            egui::Label::new(RichText::new(tab.title()).size(12.5).color(colour))
-                .sense(Sense::click()),
-        );
-        ui.add_space(14.0);
-        if response.clicked() {
+        let clicked = ui
+            .vertical_centered(|ui| theme::nav_button(ui, icon_for(tab), tab.title(), selected))
+            .inner
+            .clicked();
+        if clicked {
             app.tab = tab;
         }
+        ui.add_space(6.0);
     }
-    let _ = ctx;
+}
+
+fn icon_for(tab: Tab) -> theme::Icon {
+    match tab {
+        Tab::Home => theme::Icon::Home,
+        Tab::Search => theme::Icon::Search,
+        Tab::Live => theme::Icon::Live,
+        Tab::Extensions => theme::Icon::Extensions,
+        Tab::Settings => theme::Icon::Settings,
+    }
 }
 
 pub(crate) fn top_bar(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
@@ -66,6 +70,15 @@ pub(crate) fn home_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
         .show(ui, |ui| {
+            if !app.history.is_empty() {
+                let items: Vec<MediaItem> =
+                    app.history.iter().map(|entry| entry.item.clone()).collect();
+                let row = Row {
+                    title: "Continuar viendo".to_string(),
+                    items,
+                };
+                row_block(app, ui, &row, &mut open);
+            }
             if app.rows.is_empty() {
                 ui.add_space(18.0);
                 ui.label(RichText::new("Añade un add-on en Ajustes.").color(theme::MUTED));
@@ -96,7 +109,8 @@ fn row_block(app: &App, ui: &mut egui::Ui, row: &Row, open: &mut Option<MediaIte
                 ui.spacing_mut().item_spacing.x = 11.0;
                 for item in &row.items {
                     let texture = item.poster.as_ref().and_then(|url| app.posters.get(url));
-                    if theme::poster_card(ui, texture, &item.name).clicked() {
+                    let fraction = app.fraction_for(&item.id);
+                    if theme::poster_card(ui, texture, &item.name, fraction).clicked() {
                         *open = Some(item.clone());
                     }
                 }
@@ -118,7 +132,8 @@ pub(crate) fn search_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) 
                 ui.spacing_mut().item_spacing = Vec2::new(11.0, 11.0);
                 for item in &app.items {
                     let texture = item.poster.as_ref().and_then(|url| app.posters.get(url));
-                    if theme::poster_card(ui, texture, &item.name).clicked() {
+                    let fraction = app.fraction_for(&item.id);
+                    if theme::poster_card(ui, texture, &item.name, fraction).clicked() {
                         open = Some(item.clone());
                     }
                 }
