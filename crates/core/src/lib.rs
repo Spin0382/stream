@@ -9,6 +9,7 @@
 //! * [`store`]: settings and library as JSON.
 //! * [`host`]: the client for the JVM extension host that runs CloudStream `.cs3`
 //!   extensions untouched.
+//! * [`repo`]: CloudStream extension repositories (`repo.json` and plugin lists).
 //! * [`resolve`]: where an item came from and how to get its links.
 //!
 //! The split is deliberate: CloudStream extensions are Dalvik bytecode linked
@@ -21,6 +22,7 @@ pub mod http;
 pub mod live;
 pub mod model;
 pub mod player;
+pub mod repo;
 pub mod resolve;
 pub mod store;
 pub mod stremio;
@@ -29,6 +31,7 @@ pub use error::{Error, Result};
 pub use host::{HostClient, HostHealth, HostProcess, PluginInfo, ProviderInfo};
 pub use live::{Channel, Guide, LiveSource, Programme, XtreamClient};
 pub use model::{Episode, MediaItem, MediaKind, StreamKind, StreamLink, Subtitle};
+pub use repo::{CloudstreamPlugin, CloudstreamRepo, RepoInspection};
 pub use store::{Settings, Store};
 
 /// The version string shown in About, taken from Cargo.

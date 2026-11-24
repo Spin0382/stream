@@ -47,6 +47,11 @@ enum Command {
         #[arg(long, default_value_t = 20)]
         limit: usize,
     },
+    /// CloudStream extension repositories (`repo.json`).
+    Repo {
+        #[command(subcommand)]
+        command: RepoCommand,
+    },
     /// The JVM extension host (CloudStream extensions).
     Host {
         #[command(flatten)]
@@ -213,6 +218,7 @@ async fn main() -> Result<()> {
             channel,
             limit,
         } => epg_command(&spec, channel.as_deref(), limit).await,
+        Command::Repo { command } => repo_command(command).await,
         Command::Host {
             connection,
             command,
@@ -224,6 +230,89 @@ async fn main() -> Result<()> {
         } => play_command(&url, &headers, windowed),
         Command::Settings => settings_command(),
     }
+}
+
+#[derive(Debug, Subcommand)]
+enum RepoCommand {
+    /// Downloads a repository and lists what it offers.
+    Inspect {
+        /// A `repo.json` url, a `cloudstreamrepo://` link or a bare host.
+        spec: String,
+        /// Only extensions whose name or id matches this text.
+        #[arg(long)]
+        search: Option<String>,
+        /// Only extensions of this tv type (Movie, Series, Anime, Live).
+        #[arg(long)]
+        kind: Option<String>,
+    },
+}
+
+async fn repo_command(command: RepoCommand) -> Result<()> {
+    match command {
+        RepoCommand::Inspect { spec, search, kind } => {
+            let inspection = streamgoat_core::repo::inspect(&spec).await?;
+            let repo = &inspection.repo;
+            println!("{}", repo.name);
+            println!("  {}", inspection.url);
+            if let Some(description) = &repo.description {
+                println!("  {description}");
+            }
+            let dalvik = inspection
+                .plugins
+                .iter()
+                .filter(|plugin| plugin.runtime() == "Dalvik")
+                .count();
+            let jvm = inspection.plugins.len() - dalvik;
+            println!(
+                "  {} extensiones: {dalvik} .cs3 (Dalvik, necesitan el host) y {jvm} en jar",
+                inspection.plugins.len()
+            );
+            println!();
+
+            let needle = search.map(|text| text.to_ascii_lowercase());
+            let kind = kind.map(|text| text.to_ascii_lowercase());
+            let mut shown = 0usize;
+            for plugin in &inspection.plugins {
+                if let Some(needle) = needle.as_deref() {
+                    let haystack = format!(
+                        "{} {}",
+                        plugin.name.to_ascii_lowercase(),
+                        plugin.internal_name.to_ascii_lowercase()
+                    );
+                    if !haystack.contains(needle) {
+                        continue;
+                    }
+                }
+                if let Some(kind) = kind.as_deref() {
+                    let matches = plugin
+                        .tv_types
+                        .iter()
+                        .any(|tv| tv.to_ascii_lowercase().contains(kind));
+                    if !matches {
+                        continue;
+                    }
+                }
+                shown += 1;
+                println!(
+                    "{:<30} v{:<4} {:<6} {:<7} {}",
+                    truncate(&plugin.name, 30),
+                    plugin.version,
+                    plugin.language.as_deref().unwrap_or("--"),
+                    plugin.status_label(),
+                    plugin.internal_name
+                );
+                if let Some(description) = &plugin.description {
+                    if !description.trim().is_empty() {
+                        println!("    {}", truncate(description, 96));
+                    }
+                }
+            }
+            if shown == 0 {
+                println!("ninguna extensión coincide con el filtro");
+            }
+        }
+    }
+    Ok(())
 }
 
 async fn stremio_command(command: StremioCommand) -> Result<()> {
