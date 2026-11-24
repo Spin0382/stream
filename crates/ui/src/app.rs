@@ -191,6 +191,10 @@ impl App {
         if app.host.is_some() {
             app.connect(&cc.egui_ctx);
         }
+        // Open with content instead of an empty screen.
+        if !app.settings.addons.is_empty() {
+            app.load_addons(&cc.egui_ctx);
+        }
         app
     }
 
