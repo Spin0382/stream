@@ -1,0 +1,19 @@
+[package]
+name = "streamgoat-ui"
+description = "Stream Goat desktop app (egui) for Linux, Windows and macOS"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "streamgoat-ui"
+path = "src/main.rs"
+
+[dependencies]
+streamgoat-core = { workspace = true }
+eframe = { workspace = true }
+egui = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }
