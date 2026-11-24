@@ -115,7 +115,7 @@ pub async fn inspect(spec: &str) -> Result<RepoInspection> {
         let raw = http::fetch_text(list).await?;
         plugins.extend(parse_plugins(&raw)?);
     }
-    plugins.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    plugins.sort_by_key(|plugin| plugin.name.to_lowercase());
     Ok(RepoInspection { url, repo, plugins })
 }
 
