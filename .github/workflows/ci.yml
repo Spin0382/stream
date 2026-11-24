@@ -13,7 +13,7 @@ env:
 jobs:
   check:
     name: fmt + clippy + test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -38,9 +38,11 @@ jobs:
       - name: Tests
         run: cargo test --workspace
 
+  # Pinned, not ubuntu-latest: the runner's glibc leaks into the binary, and a
+  # newer runner produces a build that Mint 22 / Ubuntu 24.04 cannot start.
   build:
     name: release build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
