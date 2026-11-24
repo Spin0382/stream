@@ -51,6 +51,9 @@ struct Pending {
 pub fn parse_playlist(text: &str) -> Vec<Channel> {
     let mut channels = Vec::new();
     let mut pending: Option<Pending> = None;
+    // `#EXTGRP` is used both before and after the `#EXTINF` it belongs to; when it
+    // arrives first it is held here for the next channel.
+    let mut next_group: Option<String> = None;
 
     for raw in text.lines() {
         let line = raw.trim().trim_start_matches('\u{feff}');
@@ -63,11 +66,14 @@ pub fn parse_playlist(text: &str) -> Vec<Channel> {
                 pending = Some(Pending {
                     name: title,
                     attrs,
+                    group: next_group.take(),
                     ..Default::default()
                 });
             } else if let Some(rest) = line.strip_prefix("#EXTGRP:") {
-                if let Some(pending) = pending.as_mut() {
-                    pending.group = Some(rest.trim().to_string());
+                let group = rest.trim().to_string();
+                match pending.as_mut() {
+                    Some(pending) => pending.group = Some(group),
+                    None => next_group = Some(group),
                 }
             } else if let Some(rest) = line.strip_prefix("#EXTVLCOPT:") {
                 if let Some((key, value)) = rest.trim().split_once('=') {
