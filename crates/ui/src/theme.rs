@@ -154,6 +154,109 @@ pub(crate) fn poster_card(
     response
 }
 
+/// The rail icons, drawn rather than loaded, so the binary stays one file.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Icon {
+    Home,
+    Search,
+    Live,
+    Extensions,
+    Settings,
+}
+
+pub(crate) fn nav_button(
+    ui: &mut egui::Ui,
+    icon: Icon,
+    label: &str,
+    selected: bool,
+) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(56.0, 56.0), Sense::click());
+    let colour = if selected { ACCENT } else { MUTED };
+    let painter = ui.painter();
+    if response.hovered() && !selected {
+        painter.rect_filled(rect, CornerRadius::same(8), CARD);
+    }
+    let centre = egui::pos2(rect.center().x, rect.top() + 22.0);
+    let stroke = Stroke::new(1.6_f32, colour);
+    match icon {
+        Icon::Home => {
+            painter.line_segment(
+                [
+                    egui::pos2(centre.x - 8.0, centre.y + 1.0),
+                    egui::pos2(centre.x, centre.y - 8.0),
+                ],
+                stroke,
+            );
+            painter.line_segment(
+                [
+                    egui::pos2(centre.x, centre.y - 8.0),
+                    egui::pos2(centre.x + 8.0, centre.y + 1.0),
+                ],
+                stroke,
+            );
+            painter.rect_stroke(
+                Rect::from_min_max(
+                    egui::pos2(centre.x - 6.0, centre.y + 1.0),
+                    egui::pos2(centre.x + 6.0, centre.y + 8.0),
+                ),
+                CornerRadius::same(2),
+                stroke,
+                egui::StrokeKind::Inside,
+            );
+        }
+        Icon::Search => {
+            painter.circle_stroke(egui::pos2(centre.x - 2.0, centre.y - 2.0), 6.0, stroke);
+            painter.line_segment(
+                [
+                    egui::pos2(centre.x + 3.0, centre.y + 3.0),
+                    egui::pos2(centre.x + 8.0, centre.y + 8.0),
+                ],
+                stroke,
+            );
+        }
+        Icon::Live => {
+            painter.rect_stroke(
+                Rect::from_center_size(centre, Vec2::splat(16.0)),
+                CornerRadius::same(3),
+                stroke,
+                egui::StrokeKind::Inside,
+            );
+            painter.text(
+                centre,
+                Align2::CENTER_CENTER,
+                "▶",
+                FontId::proportional(8.0),
+                colour,
+            );
+        }
+        Icon::Extensions => {
+            for (dx, dy) in [(-4.5, -4.5), (4.5, -4.5), (-4.5, 4.5), (4.5, 4.5)] {
+                painter.rect_stroke(
+                    Rect::from_center_size(centre + Vec2::new(dx, dy), Vec2::new(7.0, 7.0)),
+                    CornerRadius::same(1),
+                    stroke,
+                    egui::StrokeKind::Inside,
+                );
+            }
+        }
+        Icon::Settings => {
+            painter.circle_stroke(centre, 7.5, stroke);
+            painter.circle_filled(centre, 2.5, colour);
+        }
+    }
+
+    if selected {
+        painter.text(
+            egui::pos2(rect.center().x, rect.bottom()),
+            Align2::CENTER_BOTTOM,
+            label,
+            FontId::proportional(10.5),
+            colour,
+        );
+    }
+    response
+}
+
 /// The main action of a form.
 pub(crate) fn primary_button(ui: &mut egui::Ui, text: &str) -> egui::Response {
     ui.add(
