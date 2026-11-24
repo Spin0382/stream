@@ -116,11 +116,7 @@ pub async fn inspect(spec: &str) -> Result<RepoInspection> {
         plugins.extend(parse_plugins(&raw)?);
     }
     plugins.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-    Ok(RepoInspection {
-        url,
-        repo,
-        plugins,
-    })
+    Ok(RepoInspection { url, repo, plugins })
 }
 
 #[cfg(test)]

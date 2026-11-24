@@ -56,11 +56,11 @@ pub(crate) fn install(ctx: &egui::Context) {
 
     use egui::{FontFamily::Proportional, FontId as F, TextStyle::*};
     style.text_styles = [
-        (Heading, F::new(Proportional, 24.0)),
-        (Body, F::new(Proportional, 15.0)),
-        (Monospace, F::new(egui::FontFamily::Monospace, 13.0)),
-        (Button, F::new(Proportional, 14.0)),
-        (Small, F::new(Proportional, 12.0)),
+        (Heading, F::new(24.0, Proportional)),
+        (Body, F::new(15.0, Proportional)),
+        (Monospace, F::new(13.0, egui::FontFamily::Monospace)),
+        (Button, F::new(14.0, Proportional)),
+        (Small, F::new(12.0, Proportional)),
     ]
     .into();
 
@@ -113,7 +113,7 @@ pub(crate) fn poster_card(
         painter.rect_stroke(
             art,
             CornerRadius::same(6),
-            Stroke::new(1.5, TEXT),
+            Stroke::new(1.5_f32, TEXT),
             egui::StrokeKind::Inside,
         );
         painter.text(
