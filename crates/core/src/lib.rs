@@ -3,13 +3,13 @@
 //! The Rust half of the hybrid app. It owns everything that does **not** need a
 //! JVM:
 //!
-//! * [`stremio`] – Stremio add-ons (catalogs, meta, streams).
-//! * [`live`] – Live TV: M3U playlists, Xtream Codes panels, XMLTV guides.
-//! * [`player`] – handing urls to mpv / the browser.
-//! * [`store`] – settings and library as JSON.
-//! * [`host`] – the client for the JVM extension host that runs CloudStream `.cs3`
+//! * [`stremio`]: Stremio add-ons (catalogs, meta, streams).
+//! * [`live`]: Live TV, M3U playlists, Xtream Codes panels, XMLTV guides.
+//! * [`player`]: handing urls to mpv or the browser.
+//! * [`store`]: settings and library as JSON.
+//! * [`host`]: the client for the JVM extension host that runs CloudStream `.cs3`
 //!   extensions untouched.
-//! * [`resolve`] – where an item came from and how to get its links.
+//! * [`resolve`]: where an item came from and how to get its links.
 //!
 //! The split is deliberate: CloudStream extensions are Dalvik bytecode linked
 //! against CloudStream's Kotlin API, so they keep running on a JVM (see

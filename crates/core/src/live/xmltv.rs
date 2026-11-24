@@ -41,7 +41,7 @@ pub struct Programme {
 }
 
 impl Programme {
-    /// `20:15` – `21:45` in the guide's own timezone-free UTC frame; the UI formats it.
+    /// `20:15` to `21:45`, in UTC; the UI formats it for the user.
     pub fn time_label(&self) -> String {
         match self.stop {
             Some(stop) => format!("{} - {}", fmt_hm(self.start), fmt_hm(stop)),

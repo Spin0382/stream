@@ -21,7 +21,7 @@ CloudStream extensions**.
 
 Why the split: a `.cs3` extension is Dalvik bytecode linked against CloudStream's
 Kotlin API and Android stubs (Jackson, Jsoup, OkHttp, coroutines, NewPipe). Anything
-that runs them is a JVM. So the JVM stays — as a sidecar — and everything else is
+that runs them is a JVM. So the JVM stays, as a sidecar, and everything else is
 Rust. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
 [docs/host-protocol.md](docs/host-protocol.md).
 
@@ -33,6 +33,7 @@ Rust. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
 | `crates/cli` | `streamgoat` command line (inspect sources, play, talk to the host) |
 | `crates/ui` | `streamgoat-ui`: the desktop app (egui/eframe) |
 | `host/` | the JVM extension host (Kotlin) and how to build it into the existing app |
+| `skills/` | the project skill for coding agents (`skills/stream-goat-rust/SKILL.md`) |
 
 ## Status
 

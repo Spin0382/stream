@@ -37,7 +37,7 @@ A `.cs3` is a zip with `classes.dex`. Running it needs:
 * CloudStream's `library` compiled for the JVM with the exact same signatures the
   extensions were built against (upstream commit pinned in the Kotlin repo);
 * Android stubs (`android.content.Context`, `SharedPreferences`, `android.net.Uri`,
-  `android.util.Base64`, …) — 25 classes in `android-shim`;
+  `android.util.Base64`, …): 25 classes in `android-shim`;
 * extension dependencies resolved from the host classpath: Jackson, Jsoup, OkHttp,
   kotlinx-coroutines, NewPipe Extractor, xmlpull.
 
@@ -82,6 +82,6 @@ channel url (and any `#EXTVLCOPT` headers).
    the host (`extensions.*` methods).
 3. Downloads: multi-connection, resumable, with the host resolving links only.
 4. Player polish: libmpv in-process (subtitles, skip intro, next-episode countdown,
-   audio/subtitle sync) — libmpv is C, so no JVM involved.
+   audio/subtitle sync): libmpv is C, so no JVM involved.
 5. Look: the Kotlin app's theme, glass panels, pill navigation, start animation.
 6. Packaging: Flatpak + AppImage + `.deb`, bundling the host jar and a jlink JRE.

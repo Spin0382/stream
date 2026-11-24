@@ -1,4 +1,4 @@
-//! `streamgoat` – the command line for everything the Rust half can do.
+//! `streamgoat`: the command line for everything the Rust half can do.
 //!
 //! It exists for two reasons: it is the fastest way to check a source (a playlist,
 //! a Stremio add-on, a provider in the extension host) without opening the UI, and

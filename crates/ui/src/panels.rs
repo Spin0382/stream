@@ -154,7 +154,7 @@ pub fn search_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
         for (index, item) in app.items.iter().enumerate() {
             if ui
                 .button(format!(
-                    "{} — {}",
+                    "{} - {}",
                     item.name,
                     item.provider.clone().unwrap_or_default()
                 ))

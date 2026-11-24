@@ -1,5 +1,5 @@
 /*
- * Stream Goat — JVM extension host.
+ * Stream Goat: JVM extension host.
  *
  * This file belongs in the Kotlin app (the CloudStream-for-Linux codebase this repo
  * replaces the UI of). Suggested location:
