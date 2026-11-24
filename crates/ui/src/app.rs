@@ -13,6 +13,8 @@ use streamgoat_core::player;
 use streamgoat_core::stremio::AddonClient;
 use streamgoat_core::{resolve, Settings, Store};
 
+use crate::panels;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
     Home,
@@ -295,6 +297,7 @@ impl App {
     pub fn open_item(&mut self, ctx: &egui::Context, item: MediaItem) {
         let host = self.host.clone();
         self.details = Some(item.clone());
+        let second = item.clone();
         self.links.clear();
         self.detail_from_live =
             item.source.as_deref() == Some("live") || item.source.as_deref() == Some("xtream");
@@ -307,7 +310,7 @@ impl App {
 
         let host = self.host.clone();
         self.spawn_job(ctx, async move {
-            match resolve::links(host.as_ref(), &item).await {
+            match resolve::links(host.as_ref(), &second).await {
                 Ok(links) => Msg::Links(links),
                 Err(error) => Msg::Error(format!("{error}")),
             }

@@ -373,10 +373,10 @@ async fn epg_command(spec: &str, channel: Option<&str>, limit: usize) -> Result<
     );
     let now = chrono::Utc::now();
     let programmes: Vec<&streamgoat_core::Programme> = match channel {
-        Some(channel) => guide.on_channel(channel).collect(),
+        Some(channel) => guide.on_channel(channel),
         None if !guide.channels.is_empty() => {
             let first = guide.channels.keys().next().cloned().unwrap_or_default();
-            guide.on_channel(&first).collect()
+            guide.on_channel(&first)
         }
         None => guide.programmes.iter().collect(),
     };

@@ -71,8 +71,11 @@ impl Guide {
     }
 
     /// Programmes of one channel, in time order.
-    pub fn on_channel<'a>(&'a self, channel: &'a str) -> impl Iterator<Item = &'a Programme> + 'a {
-        self.programmes.iter().filter(move |p| p.channel == channel)
+    pub fn on_channel<'a>(&'a self, channel: &str) -> Vec<&'a Programme> {
+        self.programmes
+            .iter()
+            .filter(|programme| programme.channel == channel)
+            .collect()
     }
 
     /// What is on right now (or the next programme starting soon when there is a gap).
