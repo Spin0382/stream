@@ -95,7 +95,7 @@ impl XtreamClient {
             allowed_output_formats: server
                 .get("allowed_output_formats")
                 .and_then(|v| v.as_array())
-                .map(|list| list.iter().filter_map(as_string).collect())
+                .map(|list| list.iter().filter_map(|v| as_string(Some(v))).collect())
                 .unwrap_or_default(),
         })
     }
@@ -189,7 +189,7 @@ impl XtreamClient {
         if let Some(num) = as_string(entry.get("num")) {
             attrs.insert("num".to_string(), num);
         }
-        if let Some(archive) = entry.get("tv_archive").and_then(as_i64) {
+        if let Some(archive) = entry.get("tv_archive").and_then(|v| as_i64(Some(v))) {
             attrs.insert("tv_archive".to_string(), archive.to_string());
         }
         Some(Channel {

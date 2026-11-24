@@ -78,7 +78,7 @@ impl Guide {
     /// What is on right now (or the next programme starting soon when there is a gap).
     pub fn now_on(&self, channel: &str, at: DateTime<Utc>) -> Option<&Programme> {
         let mut upcoming: Option<&Programme> = None;
-        for programme in self.on_channel(channel) {
+        for programme in self.programmes.iter().filter(|p| p.channel == channel) {
             let ends_after_start = programme.stop.map(|stop| stop > at).unwrap_or(true);
             if programme.start <= at && ends_after_start {
                 return Some(programme);

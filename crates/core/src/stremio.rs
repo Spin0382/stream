@@ -326,7 +326,7 @@ impl AddonClient {
             .name
             .clone()
             .or_else(|| stream.title.clone())
-            .or_else(|| self.manifest.name.clone());
+            .or_else(|| Some(self.manifest.name.clone()));
 
         if let Some(url) = stream.url.clone().filter(|url| !url.is_empty()) {
             let mut link = StreamLink::new(url);

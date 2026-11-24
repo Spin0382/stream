@@ -127,7 +127,7 @@ fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Option<T> {
 }
 
 /// Writes to a temp file first so a crash never leaves half a settings file.
-fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
+fn write_json<T: Serialize + ?Sized>(path: &Path, value: &T) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
