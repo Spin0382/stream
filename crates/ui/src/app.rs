@@ -96,8 +96,10 @@ pub(crate) struct App {
     pub posters: HashMap<String, egui::TextureHandle>,
     /// Posters already asked for, so a frame does not queue them twice.
     pub queued_posters: HashSet<String>,
-    /// Posters that failed once; retrying them every frame would hammer the host.
-    pub failed_posters: HashSet<String>,
+    /// Download attempts per poster, so a dead url is not retried forever.
+    pub poster_failures: HashMap<String, u8>,
+    /// Posters downloading right now; the ceiling keeps the image host calm.
+    pub posters_in_flight: usize,
     /// The egui context, kept so a finished download can upload its texture.
     pub ctx: Option<egui::Context>,
     pub details: Option<MediaItem>,
