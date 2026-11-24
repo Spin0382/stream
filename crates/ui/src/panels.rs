@@ -34,11 +34,21 @@ pub(crate) fn top_bar(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         theme::logo(ui);
         ui.add_space(24.0);
-        let search = ui.add(
-            egui::TextEdit::singleline(&mut app.search)
-                .hint_text("Buscar o pegar un enlace")
-                .desired_width(380.0),
-        );
+        let gap = ((ui.available_width() - 460.0) / 2.0).max(0.0);
+        ui.add_space(gap);
+        let search = egui::Frame::default()
+            .fill(theme::CARD)
+            .corner_radius(CornerRadius::same(18))
+            .inner_margin(egui::Margin::symmetric(14, 8))
+            .show(ui, |ui| {
+                ui.add(
+                    egui::TextEdit::singleline(&mut app.search)
+                        .frame(false)
+                        .hint_text("Buscar o pegar un enlace")
+                        .desired_width(360.0),
+                )
+            })
+            .inner;
         let enter = search.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
         if enter {
             app.tab = Tab::Search;
@@ -76,10 +86,11 @@ fn row_block(app: &App, ui: &mut egui::Ui, row: &Row, open: &mut Option<MediaIte
         return;
     }
     ui.add_space(18.0);
-    ui.label(RichText::new(&row.title).size(19.0).strong());
+    ui.label(RichText::new(&row.title).size(21.0).strong());
     ui.add_space(6.0);
     egui::ScrollArea::horizontal()
         .id_salt(&row.title)
+        .scroll_bar_visibility(egui::containers::scroll_area::ScrollBarVisibility::AlwaysHidden)
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 11.0;

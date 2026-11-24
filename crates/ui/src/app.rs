@@ -46,7 +46,7 @@ impl Tab {
 }
 
 /// How many posters download at once.
-const MAX_POSTER_DOWNLOADS: usize = 6;
+const MAX_POSTER_DOWNLOADS: usize = 8;
 
 /// One horizontal strip of the home screen.
 #[derive(Debug, Clone, Default)]
@@ -300,7 +300,7 @@ impl App {
     /// Asks for a poster once, if it is not cached or already queued.
     pub(crate) fn request_poster(&mut self, ctx: &egui::Context, url: &str) {
         if self.posters.contains_key(url)
-            || self.poster_failures.get(url).copied().unwrap_or(0) >= 2
+            || self.poster_failures.get(url).copied().unwrap_or(0) >= 3
             || self.posters_in_flight >= MAX_POSTER_DOWNLOADS
             || !self.queued_posters.insert(url.to_string())
         {
