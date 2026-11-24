@@ -6,7 +6,7 @@
 use eframe::egui;
 use std::future::Future;
 use std::sync::mpsc::{channel, Receiver, Sender};
-use streamgoat_core::host::{AvailablePlugin, HostClient, PluginInfo, ProviderInfo, RepoInfo};
+use streamgoat_core::host::{AvailablePlugin, HostClient, ProviderInfo, RepoInfo};
 use streamgoat_core::live::{Channel, Guide, LiveSource};
 use streamgoat_core::model::{MediaItem, StreamLink};
 use streamgoat_core::player;
@@ -16,7 +16,7 @@ use streamgoat_core::{resolve, Settings, Store};
 use crate::panels;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Tab {
+pub(crate) enum Tab {
     Home,
     Search,
     Live,
@@ -25,7 +25,7 @@ pub enum Tab {
 }
 
 impl Tab {
-    pub const ALL: [Tab; 5] = [
+    pub(crate) const ALL: [Tab; 5] = [
         Tab::Home,
         Tab::Search,
         Tab::Live,
@@ -33,7 +33,7 @@ impl Tab {
         Tab::Settings,
     ];
 
-    pub fn title(self) -> &'static str {
+    pub(crate) fn title(self) -> &'static str {
         match self {
             Tab::Home => "Inicio",
             Tab::Search => "Buscar",
@@ -44,9 +44,8 @@ impl Tab {
     }
 }
 
-pub enum Msg {
+pub(crate) enum Msg {
     Providers(Vec<ProviderInfo>),
-    Plugins(Vec<PluginInfo>),
     Repos(Vec<RepoInfo>),
     Available(Vec<AvailablePlugin>),
     Items(Vec<MediaItem>),
@@ -58,7 +57,7 @@ pub enum Msg {
     Error(String),
 }
 
-pub struct App {
+pub(crate) struct App {
     pub store: Store,
     pub settings: Settings,
     pub tab: Tab,
@@ -68,7 +67,6 @@ pub struct App {
     pub addons: Vec<AddonClient>,
 
     pub providers: Vec<ProviderInfo>,
-    pub plugins: Vec<PluginInfo>,
     pub repos: Vec<RepoInfo>,
     pub available: Vec<AvailablePlugin>,
     pub ext_filter: String,
@@ -102,7 +100,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub(crate) fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let store = Store::default();
         let settings = store.load_settings();
 
@@ -139,7 +137,6 @@ impl App {
             host,
             addons: Vec::new(),
             providers: Vec::new(),
-            plugins: Vec::new(),
             repos: Vec::new(),
             available: Vec::new(),
             ext_filter: String::new(),
@@ -202,10 +199,6 @@ impl App {
                     self.status = format!("{} proveedores", providers.len());
                     self.providers = providers;
                 }
-                Msg::Plugins(plugins) => {
-                    self.status = format!("{} extensiones", plugins.len());
-                    self.plugins = plugins;
-                }
                 Msg::Repos(repos) => {
                     self.repos = repos;
                 }
@@ -246,7 +239,7 @@ impl App {
     // --- actions --------------------------------------------------------------
 
     /// Repositories and every extension they offer.
-    pub fn load_extensions(&mut self, ctx: &egui::Context) {
+    pub(crate) fn load_extensions(&mut self, ctx: &egui::Context) {
         let Some(host) = self.host.clone() else {
             self.error = Some("las extensiones necesitan el host (Ajustes)".to_string());
             return;
@@ -260,7 +253,7 @@ impl App {
         self.load_repos(ctx);
     }
 
-    pub fn load_repos(&mut self, ctx: &egui::Context) {
+    pub(crate) fn load_repos(&mut self, ctx: &egui::Context) {
         let Some(host) = self.host.clone() else {
             return;
         };
@@ -272,7 +265,7 @@ impl App {
         });
     }
 
-    pub fn add_repo(&mut self, ctx: &egui::Context) {
+    pub(crate) fn add_repo(&mut self, ctx: &egui::Context) {
         let url = self.repo_buf.trim().to_string();
         if url.is_empty() {
             return;
@@ -290,7 +283,7 @@ impl App {
         self.load_repos(ctx);
     }
 
-    pub fn remove_repo(&mut self, ctx: &egui::Context, url: String) {
+    pub(crate) fn remove_repo(&mut self, ctx: &egui::Context, url: String) {
         let Some(host) = self.host.clone() else {
             return;
         };
@@ -304,7 +297,7 @@ impl App {
         self.load_repos(ctx);
     }
 
-    pub fn install_plugin(&mut self, ctx: &egui::Context, internal_name: String) {
+    pub(crate) fn install_plugin(&mut self, ctx: &egui::Context, internal_name: String) {
         let Some(host) = self.host.clone() else {
             return;
         };
@@ -317,7 +310,7 @@ impl App {
         self.load_extensions(ctx);
     }
 
-    pub fn update_extensions(&mut self, ctx: &egui::Context) {
+    pub(crate) fn update_extensions(&mut self, ctx: &egui::Context) {
         let Some(host) = self.host.clone() else {
             return;
         };
@@ -331,7 +324,7 @@ impl App {
         self.load_extensions(ctx);
     }
 
-    pub fn uninstall_plugin(&mut self, ctx: &egui::Context, internal_name: String) {
+    pub(crate) fn uninstall_plugin(&mut self, ctx: &egui::Context, internal_name: String) {
         let Some(host) = self.host.clone() else {
             return;
         };
@@ -345,7 +338,7 @@ impl App {
     }
 
     /// Health check, then providers and plugins.
-    pub fn connect(&mut self, ctx: &egui::Context) {
+    pub(crate) fn connect(&mut self, ctx: &egui::Context) {
         let Some(host) = self.host.clone() else {
             self.error = Some("no hay host configurado (Ajustes → Extensión host)".to_string());
             return;
@@ -361,19 +354,7 @@ impl App {
         });
     }
 
-    pub fn load_plugins(&mut self, ctx: &egui::Context) {
-        let Some(host) = self.host.clone() else {
-            return;
-        };
-        self.spawn_job(ctx, async move {
-            match host.plugins().await {
-                Ok(plugins) => Msg::Plugins(plugins),
-                Err(error) => Msg::Error(format!("{error}")),
-            }
-        });
-    }
-
-    pub fn load_home(&mut self, ctx: &egui::Context, provider: String) {
+    pub(crate) fn load_home(&mut self, ctx: &egui::Context, provider: String) {
         let Some(host) = self.host.clone() else {
             return;
         };
@@ -395,7 +376,7 @@ impl App {
         });
     }
 
-    pub fn search(&mut self, ctx: &egui::Context) {
+    pub(crate) fn search(&mut self, ctx: &egui::Context) {
         let query = self.search.trim().to_string();
         if query.is_empty() {
             return;
@@ -418,7 +399,7 @@ impl App {
     }
 
     /// Details and links for a card.
-    pub fn open_item(&mut self, ctx: &egui::Context, item: MediaItem) {
+    pub(crate) fn open_item(&mut self, ctx: &egui::Context, item: MediaItem) {
         let host = self.host.clone();
         self.details = Some(item.clone());
         let second = item.clone();
@@ -440,7 +421,7 @@ impl App {
     }
 
     /// Episode (or item) links.
-    pub fn open_episode(&mut self, ctx: &egui::Context, url: String) {
+    pub(crate) fn open_episode(&mut self, ctx: &egui::Context, url: String) {
         let host = self.host.clone();
         let Some(mut item) = self.details.clone() else {
             return;
@@ -454,7 +435,7 @@ impl App {
         });
     }
 
-    pub fn play(&mut self, link: &StreamLink) {
+    pub(crate) fn play(&mut self, link: &StreamLink) {
         let player = self.settings.player_command.clone();
         match player::play_link(link, player.as_deref()) {
             Ok(()) => self.status = format!("reproduciendo {}", link.label()),
@@ -462,7 +443,7 @@ impl App {
         }
     }
 
-    pub fn load_live(&mut self, ctx: &egui::Context) {
+    pub(crate) fn load_live(&mut self, ctx: &egui::Context) {
         let Some(source) = self.settings.live_sources.get(self.live_index).cloned() else {
             self.error = Some("añade una lista M3U o un login Xtream en Ajustes".to_string());
             return;
@@ -475,7 +456,7 @@ impl App {
         });
     }
 
-    pub fn load_guide(&mut self, ctx: &egui::Context) {
+    pub(crate) fn load_guide(&mut self, ctx: &egui::Context) {
         let Some(source) = self.settings.live_sources.get(self.live_index).cloned() else {
             return;
         };
@@ -499,7 +480,7 @@ impl App {
     }
 
     /// Opens every configured add-on and merges their first catalogs.
-    pub fn load_addons(&mut self, ctx: &egui::Context) {
+    pub(crate) fn load_addons(&mut self, ctx: &egui::Context) {
         let specs = self.settings.addons.clone();
         if specs.is_empty() {
             self.error = Some("añade add-ons de Stremio en Ajustes".to_string());
@@ -540,7 +521,7 @@ impl App {
         });
     }
 
-    pub fn save_settings(&mut self) {
+    pub(crate) fn save_settings(&mut self) {
         let mut settings = self.settings.clone();
         settings.addons = self
             .addon_buf
@@ -609,7 +590,7 @@ fn none_if_empty(text: &str) -> Option<String> {
 }
 
 /// `m3u | Nombre | url` or `xtream | Nombre | base | usuario | contraseña`.
-pub fn parse_live_sources(text: &str) -> Vec<LiveSource> {
+pub(crate) fn parse_live_sources(text: &str) -> Vec<LiveSource> {
     let mut sources = Vec::new();
     for line in text.lines() {
         let line = line.trim();
@@ -634,7 +615,7 @@ pub fn parse_live_sources(text: &str) -> Vec<LiveSource> {
     sources
 }
 
-pub fn format_live_sources(sources: &[LiveSource]) -> String {
+pub(crate) fn format_live_sources(sources: &[LiveSource]) -> String {
     sources
         .iter()
         .map(|source| match source {

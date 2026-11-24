@@ -93,7 +93,7 @@ fn short_id(url: &str) -> String {
     // Cheap stable hash, enough to give every card a unique egui id.
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for byte in url.as_bytes() {
-        hash ^= *byte as u64;
+        hash ^= u64::from(*byte);
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }
     format!("{hash:016x}")

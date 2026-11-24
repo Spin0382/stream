@@ -8,7 +8,6 @@ edition = "2021"
 rust-version = "1.82"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/Spin0382/stream"
-authors = ["Spin0382"]
 
 [workspace.dependencies]
 anyhow = "1"
@@ -37,7 +36,6 @@ chrono = { version = "0.4", default-features = false, features = ["std", "clock"
 clap = { version = "4", features = ["derive", "env"] }
 dirs = "6"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 eframe = "0.32"
 egui = "0.32"
 

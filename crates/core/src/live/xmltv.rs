@@ -275,7 +275,7 @@ pub fn parse_time(value: &str) -> Option<DateTime<Utc>> {
 
     // The stamp is local time at `offset`; UTC is that minus the offset.
     let offset_seconds = parse_offset(offset).unwrap_or(0);
-    let utc = naive - chrono::Duration::seconds(offset_seconds as i64);
+    let utc = naive - chrono::Duration::seconds(i64::from(offset_seconds));
     Some(utc.and_utc())
 }
 
@@ -422,11 +422,11 @@ fn parse_attrs(input: &str) -> Vec<(&str, &str)> {
     let mut out = Vec::new();
     let mut i = 0usize;
     while i < bytes.len() {
-        while i < bytes.len() && (bytes[i] as char).is_whitespace() {
+        while i < bytes.len() && char::from(bytes[i]).is_whitespace() {
             i += 1;
         }
         let key_start = i;
-        while i < bytes.len() && bytes[i] != b'=' && !(bytes[i] as char).is_whitespace() {
+        while i < bytes.len() && bytes[i] != b'=' && !char::from(bytes[i]).is_whitespace() {
             i += 1;
         }
         if key_start == i {
@@ -451,7 +451,7 @@ fn parse_attrs(input: &str) -> Vec<(&str, &str)> {
             out.push((key, value));
         } else {
             let value_start = i;
-            while i < bytes.len() && !(bytes[i] as char).is_whitespace() {
+            while i < bytes.len() && !char::from(bytes[i]).is_whitespace() {
                 i += 1;
             }
             out.push((key, &input[value_start..i]));

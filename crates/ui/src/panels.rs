@@ -9,7 +9,7 @@ use eframe::egui;
 use streamgoat_core::live::filter_channels;
 use streamgoat_core::model::{MediaKind, StreamLink};
 
-pub fn top_bar(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
+pub(crate) fn top_bar(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.heading("Stream Goat");
         ui.separator();
@@ -48,7 +48,7 @@ pub fn top_bar(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
     }
 }
 
-pub fn home_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
+pub(crate) fn home_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         if app.providers.is_empty() {
             ui.label("Sin providers: arranca el host de extensiones y pulsa Conectar host.");
@@ -130,7 +130,7 @@ pub fn home_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
     }
 }
 
-pub fn search_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
+pub(crate) fn search_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         let response = ui.add(
             egui::TextEdit::singleline(&mut app.search)
@@ -172,7 +172,7 @@ pub fn search_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
     }
 }
 
-pub fn live_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
+pub(crate) fn live_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         let names: Vec<String> = app
             .settings
@@ -276,7 +276,7 @@ pub fn live_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
 }
 
 /// Repositories on the left, the extensions they offer on the right.
-pub fn extensions_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
+pub(crate) fn extensions_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         if ui
             .button("Recargar")
@@ -373,13 +373,12 @@ pub fn extensions_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
                                 ui.with_layout(
                                     egui::Layout::right_to_left(egui::Align::Center),
                                     |ui| {
-                                        if plugin.is_installed() {
-                                            if plugin.update_available() {
-                                                if ui.button("Actualizar").clicked() {
-                                                    action =
-                                                        Some((true, plugin.internal_name.clone()));
-                                                }
+                                        if plugin.is_installed() && plugin.update_available() {
+                                            if ui.button("Actualizar").clicked() {
+                                                action = Some((true, plugin.internal_name.clone()));
                                             }
+                                        }
+                                        if plugin.is_installed() {
                                             if ui.button("Quitar").clicked() {
                                                 action =
                                                     Some((false, plugin.internal_name.clone()));
@@ -418,7 +417,7 @@ pub fn extensions_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
     });
 }
 
-pub fn settings_tab(app: &mut App, _ctx: &egui::Context, ui: &mut egui::Ui) {
+pub(crate) fn settings_tab(app: &mut App, _ctx: &egui::Context, ui: &mut egui::Ui) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         ui.heading("Extensión host (CloudStream)");
         ui.label("El host es un proceso Java aparte; aquí solo se le dice dónde escucha.");
@@ -510,7 +509,7 @@ pub fn settings_tab(app: &mut App, _ctx: &egui::Context, ui: &mut egui::Ui) {
     });
 }
 
-pub fn details_panel(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
+pub(crate) fn details_panel(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
     let Some(details) = app.details.clone() else {
         return;
     };
