@@ -17,3 +17,6 @@ eframe = { workspace = true }
 egui = { workspace = true }
 tokio = { workspace = true }
 serde_json = { workspace = true }
+
+[lints]
+workspace = true

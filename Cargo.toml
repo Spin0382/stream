@@ -43,6 +43,29 @@ egui = "0.32"
 
 streamgoat-core = { path = "crates/core" }
 
+# A deliberately small slice of morganlinton/BeautifulRust's tested lint set
+# (lints/lints.toml). The pedantic group and `-D warnings` are a follow-up once the
+# first pass of the port is done; keep the log readable until then.
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+unwrap_used = "warn"
+panic_in_result_fn = "warn"
+string_add = "warn"
+as_conversions = "warn"
+cast_possible_truncation = "warn"
+cast_sign_loss = "warn"
+dbg_macro = "warn"
+todo = "warn"
+# The CLI and the UI print on purpose: this workspace ships applications, not a library.
+print_stdout = "allow"
+print_stderr = "allow"
+
 [profile.release]
 lto = "thin"
 codegen-units = 1
