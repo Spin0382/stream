@@ -346,6 +346,7 @@ pub(crate) fn extensions_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::
             ui.horizontal(|ui| {
                 ui.strong("Extensiones");
                 ui.weak(format!("({})", app.available.len()));
+                ui.weak(format!("· {} add-ons", app.addons.len()));
             });
             ui.add_space(4.0);
             let needle = app.ext_filter.trim().to_ascii_lowercase();
@@ -378,12 +379,14 @@ pub(crate) fn extensions_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::
                                                 action = Some((true, plugin.internal_name.clone()));
                                             }
                                         }
-                                        if plugin.is_installed() {
-                                            if ui.button("Quitar").clicked() {
-                                                action =
-                                                    Some((false, plugin.internal_name.clone()));
-                                            }
-                                        } else if ui.button("Instalar").clicked() {
+                                        let installed = plugin.is_installed();
+                                        let remove =
+                                            ui.add_enabled(installed, egui::Button::new("Quitar"));
+                                        let install = ui
+                                            .add_enabled(!installed, egui::Button::new("Instalar"));
+                                        if remove.clicked() {
+                                            action = Some((false, plugin.internal_name.clone()));
+                                        } else if install.clicked() {
                                             action = Some((true, plugin.internal_name.clone()));
                                         }
                                     },

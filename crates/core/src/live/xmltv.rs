@@ -308,7 +308,6 @@ enum Token<'a> {
 struct Tag<'a> {
     name: &'a str,
     attrs: Vec<(&'a str, &'a str)>,
-    self_closing: bool,
 }
 
 impl<'a> Tag<'a> {
@@ -404,16 +403,13 @@ fn push_text<'a>(tokens: &mut Vec<Token<'a>>, text: &'a str) {
 }
 
 fn parse_tag(inner: &str) -> Tag<'_> {
-    let trimmed = inner.trim();
-    let self_closing = trimmed.ends_with('/');
-    let trimmed = trimmed.trim_end_matches('/');
+    let trimmed = inner.trim().trim_end_matches('/');
     let mut parts = trimmed.splitn(2, char::is_whitespace);
     let name = parts.next().unwrap_or("").trim();
     let rest = parts.next().unwrap_or("");
     Tag {
         name,
         attrs: parse_attrs(rest),
-        self_closing,
     }
 }
 
