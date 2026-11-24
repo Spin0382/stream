@@ -149,7 +149,7 @@ pub(crate) fn home_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
 
 fn hero_block(app: &App, ui: &mut egui::Ui, hero: &MediaItem, open: &mut Option<MediaItem>) {
     let width = ui.available_width();
-    let (rect, _) = ui.allocate_exact_size(Vec2::new(width, 320.0), Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(width, 280.0), Sense::hover());
     let painter = ui.painter();
     painter.rect_filled(rect, CornerRadius::same(10), theme::SURFACE);
 
@@ -162,49 +162,52 @@ fn hero_block(app: &App, ui: &mut egui::Ui, hero: &MediaItem, open: &mut Option<
             Color32::WHITE,
         );
     }
-    // Dark scrim so the title reads over any artwork.
+
+    // Two scrims: a light one over the artwork, a darker one under the text.
     painter.rect_filled(
         rect,
         CornerRadius::same(10),
-        Color32::from_rgba_unmultiplied(8, 8, 10, 190),
+        Color32::from_rgba_unmultiplied(8, 8, 10, 120),
+    );
+    let bottom = Rect::from_min_max(
+        egui::pos2(rect.left(), rect.bottom() - 130.0),
+        rect.right_bottom(),
+    );
+    painter.rect_filled(
+        bottom,
+        CornerRadius::same(10),
+        Color32::from_rgba_unmultiplied(8, 8, 10, 165),
     );
 
     let left = rect.left() + 28.0;
-    let mut baseline = rect.bottom() - 96.0;
-    if let Some(poster) = hero.poster.as_ref().and_then(|url| app.posters.get(url)) {
-        let poster_rect =
-            Rect::from_min_size(egui::pos2(left, baseline - 130.0), Vec2::new(88.0, 132.0));
-        painter.image(
-            poster.id(),
-            poster_rect,
-            Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-            Color32::WHITE,
-        );
-        baseline = poster_rect.bottom();
-    }
-
-    let meta = match hero.year {
-        Some(year) => format!("{year}"),
-        None => String::new(),
-    };
-    if !meta.is_empty() {
-        painter.text(
-            egui::pos2(left, baseline - 46.0),
-            Align2::LEFT_BOTTOM,
-            meta,
-            FontId::proportional(13.0),
-            theme::MUTED,
-        );
-    }
     painter.text(
-        egui::pos2(left, baseline - 22.0),
+        egui::pos2(left, rect.bottom() - 84.0),
         Align2::LEFT_BOTTOM,
         &hero.name,
         FontId::proportional(30.0),
         theme::TEXT,
     );
+    let mut meta: Vec<String> = Vec::new();
+    if let Some(year) = hero.year {
+        meta.push(year.to_string());
+    }
+    if let Some(provider) = &hero.provider {
+        meta.push(provider.clone());
+    }
+    if !meta.is_empty() {
+        painter.text(
+            egui::pos2(left, rect.bottom() - 76.0),
+            Align2::LEFT_TOP,
+            meta.join(" · "),
+            FontId::proportional(12.0),
+            theme::MUTED,
+        );
+    }
 
-    let button = Rect::from_min_size(egui::pos2(left, baseline + 10.0), Vec2::new(140.0, 34.0));
+    let button = Rect::from_min_size(
+        egui::pos2(left, rect.bottom() - 52.0),
+        Vec2::new(140.0, 34.0),
+    );
     let response = ui.put(
         button,
         egui::Button::new(RichText::new("Ver detalles").strong().color(theme::TEXT))

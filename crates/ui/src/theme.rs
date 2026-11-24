@@ -16,6 +16,9 @@ pub(crate) const BORDER: Color32 = Color32::from_rgb(38, 38, 44);
 /// Poster card size, and the taller one used by the first row.
 pub(crate) const CARD_SIZE: Vec2 = Vec2::new(132.0, 198.0);
 
+/// Room under a poster for its title and year.
+const CAPTION_HEIGHT: f32 = 30.0;
+
 pub(crate) fn install(ctx: &egui::Context) {
     let mut style = (*ctx.style()).clone();
 
@@ -90,7 +93,7 @@ pub(crate) fn poster_card(
     subtitle: Option<&str>,
 ) -> egui::Response {
     let (outer, response) =
-        ui.allocate_exact_size(CARD_SIZE + Vec2::new(0.0, 22.0), Sense::click());
+        ui.allocate_exact_size(CARD_SIZE + Vec2::new(0.0, CAPTION_HEIGHT), Sense::click());
     let art = Rect::from_min_size(outer.min, CARD_SIZE);
     let painter = ui.painter();
 
@@ -136,16 +139,16 @@ pub(crate) fn poster_card(
     painter.text(
         egui::pos2(outer.left(), art.bottom() + 4.0),
         Align2::LEFT_TOP,
-        title,
+        fit(title, 20),
         FontId::proportional(12.0),
         if response.hovered() { TEXT } else { MUTED },
     );
     if let Some(subtitle) = subtitle {
         painter.text(
-            egui::pos2(outer.right(), art.bottom() + 4.0),
-            Align2::RIGHT_TOP,
+            egui::pos2(outer.left(), art.bottom() + 18.0),
+            Align2::LEFT_TOP,
             subtitle,
-            FontId::proportional(11.0),
+            FontId::proportional(10.5),
             Color32::from_rgb(110, 110, 118),
         );
     }
@@ -161,4 +164,14 @@ pub(crate) fn primary_button(ui: &mut egui::Ui, text: &str) -> egui::Response {
             .corner_radius(CornerRadius::same(4))
             .min_size(Vec2::new(120.0, 34.0)),
     )
+}
+
+/// Cuts a title to what fits under a poster.
+fn fit(text: &str, max_chars: usize) -> String {
+    if text.chars().count() <= max_chars {
+        return text.to_string();
+    }
+    let mut cut: String = text.chars().take(max_chars.saturating_sub(1)).collect();
+    cut.push('…');
+    cut
 }
