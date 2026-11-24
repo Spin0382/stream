@@ -27,7 +27,7 @@ pub(crate) fn top_bar(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
                         egui::pos2(response.rect.left(), response.rect.bottom() + 2.0),
                         egui::pos2(response.rect.right(), response.rect.bottom() + 2.0),
                     ],
-                    egui::Stroke::new(2.0, theme::ACCENT),
+                    egui::Stroke::new(2.0_f32, theme::ACCENT),
                 );
             }
             if response.clicked() {
@@ -81,6 +81,47 @@ pub(crate) fn top_bar(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
 
 pub(crate) fn home_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
     let mut open: Option<MediaItem> = None;
+
+    ui.horizontal(|ui| {
+        if app.providers.is_empty() {
+            ui.label(
+                RichText::new("Conecta el host para leer los providers")
+                    .small()
+                    .color(theme::MUTED),
+            );
+        } else {
+            let current = app
+                .provider
+                .as_ref()
+                .and_then(|id| {
+                    app.providers
+                        .iter()
+                        .find(|provider| &provider.id == id)
+                        .map(|provider| provider.name.clone())
+                })
+                .unwrap_or_else(|| "Provider".to_string());
+            egui::ComboBox::from_id_salt("provider")
+                .selected_text(current)
+                .show_ui(ui, |ui| {
+                    let ids: Vec<(String, String)> = app
+                        .providers
+                        .iter()
+                        .map(|provider| (provider.id.clone(), provider.name.clone()))
+                        .collect();
+                    for (id, name) in ids {
+                        ui.selectable_value(&mut app.provider, Some(id), name);
+                    }
+                });
+            if ui.button("Cargar").clicked() {
+                if let Some(provider) = app.provider.clone() {
+                    app.load_home(ctx, provider);
+                }
+            }
+        }
+        if ui.button("Add-ons").clicked() {
+            app.load_addons(ctx);
+        }
+    });
 
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])

@@ -25,12 +25,12 @@ pub(crate) fn install(ctx: &egui::Context) {
     style.visuals.extreme_bg_color = Color32::from_rgb(8, 8, 10);
     style.visuals.faint_bg_color = SURFACE;
     style.visuals.override_text_color = Some(TEXT);
-    style.visuals.window_stroke = Stroke::new(1.0, BORDER);
+    style.visuals.window_stroke = Stroke::new(1.0_f32, BORDER);
 
     {
         let widgets = &mut style.visuals.widgets;
         widgets.noninteractive.bg_fill = SURFACE;
-        widgets.noninteractive.bg_stroke = Stroke::new(1.0, BORDER);
+        widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, BORDER);
         widgets.inactive.bg_fill = CARD;
         widgets.inactive.weak_bg_fill = CARD;
         widgets.hovered.bg_fill = Color32::from_rgb(44, 44, 50);
@@ -48,7 +48,7 @@ pub(crate) fn install(ctx: &egui::Context) {
         }
     }
     style.visuals.selection.bg_fill = ACCENT;
-    style.visuals.selection.stroke = Stroke::new(1.0, TEXT);
+    style.visuals.selection.stroke = Stroke::new(1.0_f32, TEXT);
 
     style.spacing.item_spacing = Vec2::new(10.0, 8.0);
     style.spacing.button_padding = Vec2::new(14.0, 7.0);

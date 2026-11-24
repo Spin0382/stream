@@ -295,7 +295,11 @@ impl App {
                 Ok(bytes) => match image::load_from_memory(&bytes) {
                     Ok(decoded) => {
                         let rgba = decoded.to_rgba8();
-                        let size = [rgba.width() as usize, rgba.height() as usize];
+                        let (width, height) = rgba.dimensions();
+                        let size = [
+                            usize::try_from(width).unwrap_or_default(),
+                            usize::try_from(height).unwrap_or_default(),
+                        ];
                         Msg::Poster(
                             url,
                             egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw()),
