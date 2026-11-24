@@ -5,7 +5,7 @@
 
 use crate::app::{App, Row, Tab};
 use crate::theme;
-use eframe::egui::{self, Align2, Color32, CornerRadius, FontId, Rect, RichText, Sense, Vec2};
+use eframe::egui::{self, Align2, CornerRadius, FontId, RichText, Sense, Vec2};
 use streamgoat_core::live::filter_channels;
 use streamgoat_core::model::{MediaItem, StreamLink};
 
@@ -146,6 +146,9 @@ pub(crate) fn live_tab(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
                 app.channels.clear();
                 app.guide = None;
                 app.load_live(ctx);
+            }
+            if ui.button("Guía").clicked() {
+                app.load_guide(ctx);
             }
         }
 

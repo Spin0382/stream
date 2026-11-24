@@ -79,7 +79,6 @@ pub(crate) struct App {
 
     /// The extension host, once it answered.
     pub host: Option<HostClient>,
-    pub addons: Vec<AddonClient>,
 
     pub providers: Vec<ProviderInfo>,
     pub repos: Vec<RepoInfo>,
@@ -159,7 +158,6 @@ impl App {
             settings,
             tab: Tab::Home,
             host,
-            addons: Vec::new(),
             providers: Vec::new(),
             repos: Vec::new(),
             available: Vec::new(),
