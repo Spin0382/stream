@@ -187,8 +187,13 @@ mod tests {
             normalize_repo_url("cloudstreamrepo://example.com/repo.json"),
             "https://example.com/repo.json"
         );
+        // A path without .json is treated as a folder holding repo.json.
         assert_eq!(
             normalize_repo_url("cloudstreamrepo://example.com/repo"),
+            "https://example.com/repo/repo.json"
+        );
+        assert_eq!(
+            normalize_repo_url("cloudstreamrepo://example.com"),
             "https://example.com/repo.json"
         );
         assert_eq!(
