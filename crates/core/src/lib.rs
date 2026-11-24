@@ -28,7 +28,7 @@ pub mod stremio;
 pub use error::{Error, Result};
 pub use host::{HostClient, HostHealth, HostProcess, PluginInfo, ProviderInfo};
 pub use live::{Channel, Guide, LiveSource, Programme, XtreamClient};
-pub use model::{CatalogRow, Episode, MediaItem, MediaKind, StreamKind, StreamLink, Subtitle};
+pub use model::{Episode, MediaItem, MediaKind, StreamKind, StreamLink, Subtitle};
 pub use store::{Settings, Store};
 
 /// The version string shown in About, taken from Cargo.

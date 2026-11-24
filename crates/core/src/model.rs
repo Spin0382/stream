@@ -87,11 +87,6 @@ impl MediaItem {
             ..Default::default()
         }
     }
-
-    pub fn with_poster(mut self, poster: Option<String>) -> Self {
-        self.poster = poster.filter(|p| !p.is_empty());
-        self
-    }
 }
 
 fn short_id(url: &str) -> String {

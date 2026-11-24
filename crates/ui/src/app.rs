@@ -63,7 +63,6 @@ pub struct App {
     pub items: Vec<MediaItem>,
     pub details: Option<MediaItem>,
     pub links: Vec<StreamLink>,
-    pub detail_from_live: bool,
 
     pub search: String,
 
@@ -131,7 +130,6 @@ impl App {
             items: Vec::new(),
             details: None,
             links: Vec::new(),
-            detail_from_live: false,
             search: String::new(),
             live_index: 0,
             channels: Vec::new(),
@@ -299,8 +297,6 @@ impl App {
         self.details = Some(item.clone());
         let second = item.clone();
         self.links.clear();
-        self.detail_from_live =
-            item.source.as_deref() == Some("live") || item.source.as_deref() == Some("xtream");
         self.spawn_job(ctx, async move {
             match resolve::details(host.as_ref(), &item).await {
                 Ok(full) => Msg::Details(Box::new(full)),
@@ -446,11 +442,6 @@ impl App {
             }
             Err(error) => self.error = Some(format!("no se pudo guardar: {error}")),
         }
-    }
-
-    /// Live source that is selected right now.
-    pub fn current_live(&self) -> Option<&LiveSource> {
-        self.settings.live_sources.get(self.live_index)
     }
 }
 

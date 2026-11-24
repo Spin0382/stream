@@ -87,15 +87,18 @@ impl XtreamClient {
         let user = value.get("user_info").cloned().unwrap_or(Value::Null);
         let server = value.get("server_info").cloned().unwrap_or(Value::Null);
         Ok(XtreamAccount {
-            username: as_string(user.get("username")).unwrap_or_else(|| self.username.clone()),
-            status: as_string(user.get("status")).unwrap_or_default(),
-            expires: as_i64(user.get("exp_date")),
-            max_connections: as_i64(user.get("max_connections")),
-            server_url: as_string(server.get("url")),
+            username: user
+                .get("username")
+                .and_then(json_string)
+                .unwrap_or_else(|| self.username.clone()),
+            status: user.get("status").and_then(json_string).unwrap_or_default(),
+            expires: user.get("exp_date").and_then(json_i64),
+            max_connections: user.get("max_connections").and_then(json_i64),
+            server_url: server.get("url").and_then(json_string),
             allowed_output_formats: server
                 .get("allowed_output_formats")
                 .and_then(|v| v.as_array())
-                .map(|list| list.iter().filter_map(|v| as_string(Some(v))).collect())
+                .map(|list| list.iter().filter_map(json_string).collect())
                 .unwrap_or_default(),
         })
     }
@@ -180,62 +183,77 @@ impl XtreamClient {
     }
 
     fn map_live_stream(&self, entry: &Value) -> Option<Channel> {
-        let stream_id = as_string(entry.get("stream_id"))?;
-        let name = as_string(entry.get("name")).unwrap_or_else(|| stream_id.clone());
+        let stream_id = entry.get("stream_id").and_then(json_string)?;
+        let name = entry
+            .get("name")
+            .and_then(json_string)
+            .unwrap_or_else(|| stream_id.clone());
         let mut attrs = BTreeMap::new();
-        if let Some(id) = as_string(entry.get("stream_id")) {
+        if let Some(id) = entry.get("stream_id").and_then(json_string) {
             attrs.insert("stream_id".to_string(), id);
         }
-        if let Some(num) = as_string(entry.get("num")) {
+        if let Some(num) = entry.get("num").and_then(json_string) {
             attrs.insert("num".to_string(), num);
         }
-        if let Some(archive) = entry.get("tv_archive").and_then(|v| as_i64(Some(v))) {
+        if let Some(archive) = entry.get("tv_archive").and_then(json_i64) {
             attrs.insert("tv_archive".to_string(), archive.to_string());
         }
         Some(Channel {
             name,
             url: self.stream_url(&stream_id),
-            tvg_id: as_string(entry.get("epg_channel_id")),
-            logo: as_string(entry.get("stream_icon")),
-            group: as_string(entry.get("category_name")),
+            tvg_id: entry.get("epg_channel_id").and_then(json_string),
+            logo: entry.get("stream_icon").and_then(json_string),
+            group: entry.get("category_name").and_then(json_string),
             headers: BTreeMap::new(),
             attrs,
         })
     }
 
     fn map_vod(&self, entry: &Value) -> Option<MediaItem> {
-        let stream_id = as_string(entry.get("stream_id"))?;
+        let stream_id = entry.get("stream_id").and_then(json_string)?;
         let mut item = MediaItem::new(
-            as_string(entry.get("name")).unwrap_or_else(|| stream_id.clone()),
+            entry
+                .get("name")
+                .and_then(json_string)
+                .unwrap_or_else(|| stream_id.clone()),
             format!(
                 "{}/movie/{}/{}/{}.{}",
                 self.base.trim_end_matches('/'),
                 self.username,
                 self.password,
                 stream_id,
-                as_string(entry.get("container_extension")).unwrap_or_else(|| "mp4".into())
+                entry
+                    .get("container_extension")
+                    .and_then(json_string)
+                    .unwrap_or_else(|| "mp4".into())
             ),
         );
-        item.poster = as_string(entry.get("stream_icon"));
+        item.poster = entry.get("stream_icon").and_then(json_string);
         item.kind = MediaKind::Movie;
-        item.provider = as_string(entry.get("category_name"));
+        item.provider = entry.get("category_name").and_then(json_string);
         item.source = Some("xtream".to_string());
-        item.year = as_string(entry.get("year")).and_then(|y| y.parse().ok());
-        item.description = as_string(entry.get("plot"));
+        item.year = entry
+            .get("year")
+            .and_then(json_string)
+            .and_then(|y| y.parse().ok());
+        item.description = entry.get("plot").and_then(json_string);
         Some(item)
     }
 
     fn map_series(&self, entry: &Value) -> Option<MediaItem> {
-        let series_id = as_string(entry.get("series_id"))?;
+        let series_id = entry.get("series_id").and_then(json_string)?;
         let mut item = MediaItem::new(
-            as_string(entry.get("name")).unwrap_or_else(|| series_id.clone()),
+            entry
+                .get("name")
+                .and_then(json_string)
+                .unwrap_or_else(|| series_id.clone()),
             format!("xtream:series:{series_id}"),
         );
-        item.poster = as_string(entry.get("cover"));
+        item.poster = entry.get("cover").and_then(json_string);
         item.kind = MediaKind::Series;
-        item.provider = as_string(entry.get("category_name"));
+        item.provider = entry.get("category_name").and_then(json_string);
         item.source = Some("xtream".to_string());
-        item.description = as_string(entry.get("plot"));
+        item.description = entry.get("plot").and_then(json_string);
         Some(item)
     }
 }
@@ -264,10 +282,13 @@ pub fn map_categories(value: &Value) -> Vec<XtreamCategory> {
         .map(|list| {
             list.iter()
                 .filter_map(|entry| {
-                    let id = as_string(entry.get("category_id"))?;
+                    let id = entry.get("category_id").and_then(json_string)?;
                     Some(XtreamCategory {
-                        name: as_string(entry.get("category_name")).unwrap_or_else(|| id.clone()),
-                        parent_id: as_string(entry.get("parent_id")),
+                        name: entry
+                            .get("category_name")
+                            .and_then(json_string)
+                            .unwrap_or_else(|| id.clone()),
+                        parent_id: entry.get("parent_id").and_then(json_string),
                         id,
                     })
                 })
@@ -276,8 +297,8 @@ pub fn map_categories(value: &Value) -> Vec<XtreamCategory> {
         .unwrap_or_default()
 }
 
-fn as_string(value: Option<&Value>) -> Option<String> {
-    match value? {
+fn json_string(value: &Value) -> Option<String> {
+    match value {
         Value::String(text) => {
             if text.trim().is_empty() {
                 None
@@ -291,8 +312,8 @@ fn as_string(value: Option<&Value>) -> Option<String> {
     }
 }
 
-fn as_i64(value: Option<&Value>) -> Option<i64> {
-    match value? {
+fn json_i64(value: &Value) -> Option<i64> {
+    match value {
         Value::Number(number) => number.as_i64(),
         Value::String(text) => text.trim().parse().ok(),
         _ => None,
